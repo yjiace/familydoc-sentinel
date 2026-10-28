@@ -1,0 +1,115 @@
+/**
+ * 家医智核·流言粉碎 全局样式表
+ * 遵循适老化设计规范与现代界面美学：正文字号 >= 18px，高对比度，单屏弹性响应
+ */
+:root {
+  --primary-blue: #2563eb;
+  --primary-blue-hover: #1d4ed8;
+  --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  --bg-page: linear-gradient(180deg, #eaf2fd 0%, #f1f6fd 38%, #f8faff 100%);
+  --card-bg: #ffffff;
+  --card-shadow: 0 10px 25px -4px rgba(37, 99, 235, 0.06), 0 4px 10px -2px rgba(15, 23, 42, 0.03);
+  --border-light: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+
+  /* 印章与状态建议色值 */
+  --stamp-supported: #059669;
+  --stamp-misleading: #e11d48;
+  --stamp-conditional: #d97706;
+  --stamp-unverified: #64748b;
+  --stamp-unverified-seal: #ef4444;
+  --stamp-ask-doctor: #2563eb;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Noto Sans CJK SC', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* 印章入场动画 */
+@keyframes stampIn {
+  0% {
+    opacity: 0;
+    transform: rotate(-14deg) scale(1.35);
+  }
+  70% {
+    opacity: 1;
+    transform: rotate(-14deg) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-14deg) scale(1);
+  }
+}
+
+.stamp-animate {
+  animation: stampIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* 减少动态效果模式 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .stamp-animate {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: rotate(-14deg) scale(1) !important;
+  }
+}
+
+/* 优雅定制滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

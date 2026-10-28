@@ -1,0 +1,108 @@
+# ===================================================================
+# 1. 操作系统与临时文件
+# ===================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# ===================================================================
+# 2. 编辑器与 IDE 配置 (防止泄露个人本地配置与临时状态)
+# ===================================================================
+# IntelliJ IDEA / WebStorm
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Eclipse / STS / NetBeans
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+nbproject/private/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# ===================================================================
+# 3. 后端 (Java / Maven / Spring Boot)
+# ===================================================================
+**/target/
+backend/target/
+*.class
+
+# Maven 构建与打包输出
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven 临时文件
+.mvn/wrapper/maven-wrapper.jar
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# 日志文件
+logs/
+**/logs/
+*.log
+
+# ===================================================================
+# 4. 前端 (Node / Vite / Vue / TypeScript)
+# ===================================================================
+# 依赖包 (严禁提交)
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# 构建输出
+dist/
+**/dist/
+dist-ssr/
+*.local
+
+# 构建与开发缓存
+.vite/
+.vite-temp/
+*.tsbuildinfo
+
+# 包管理器日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===================================================================
+# 5. 环境变量与敏感配置 (Secrets & Local Environments)
+# ===================================================================
+.env.local
+.env.*.local
+*.env
+!*.env.example
+*.pem
+*.key
+*.cert

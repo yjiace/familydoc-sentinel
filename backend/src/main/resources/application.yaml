@@ -1,0 +1,269 @@
+server:
+  port: 8080
+  forward-headers-strategy: native   # 使用 Tomcat 的 RemoteIpValve
+  tomcat:
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+
+
+spring:
+  application:
+    name: familydoc-sentinel
+
+  ai:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      chat:
+        model: ${DEEPSEEK_MODEL:deepseek-chat}
+
+
+tencentcloud:
+  wsa:
+    secretId: ${TENCENT_WSA_SECRET_ID:}
+    secretKey: ${TENCENT_WSA_SECRET_KEY:}
+
+
+# 家医智核·流言粉碎 核心业务规则与白名单配置（修改配置无需改动代码逻辑）
+factcheck:
+  # 检索策略、并发与调用预算配置（对应需求 4.3、4.4、4.10）
+  search:
+    # 单论断最大检索次数硬上限（含重试）
+    max-per-claim: 3
+    # 单次核验请求总检索次数硬上限
+    max-per-request: 12
+    # 每日全局检索调用额度上限
+    daily-quota: 5000
+    # 每日额度告警阈值比例（达到 80% 触发运维告警日志）
+    quota-warn-ratio: 0.8
+    # 证据准入与充分性判定的相关度阈值初值
+    relevance-threshold: 0.5
+    # 中性检索词最大字符长度上限（超出时由模型语义压缩重写最多2次）
+    query-max-length: 50
+    # 单次检索请求超时时间（秒）
+    timeout-seconds: 3
+    # 单条论断核验总时限（秒）
+    claim-timeout-seconds: 12
+    # 整次核验任务总时限（秒）
+    task-timeout-seconds: 30
+    # 单次任务内论断并行核验的最大并发数
+    concurrency: 3
+    # 学术类行业检索开关（默认关闭，实测覆盖率不足时开启）
+    enable-academic: false
+
+  # 缓存与任务状态保持配置（对应需求 3.2、4.9、4.10）
+  cache:
+    # 活跃任务状态与重试上下文在内存中的保留时长（分钟）
+    active-task-ttl-minutes: 60
+    # 完整核验结论短期高频缓存时长（小时，存在待重试条目时不入缓存）
+    result-cache-ttl-hours: 24
+
+  # 危急红线阈值配置（对应需求 4.1）
+  red-flag:
+    # 收缩压危急阈值（mmHg）
+    sbp-threshold: 180
+    # 舒张压危急阈值（mmHg）
+    dbp-threshold: 110
+    # 血糖高值危急阈值（mmol/L）
+    glucose-high-threshold: 16.7
+    # 血糖低值危急阈值（mmol/L）
+    glucose-low-threshold: 2.8
+
+  # 证据分级准入白名单配置（对应需求 4.5：行业过滤返回站点不自动算一级，仍须命中白名单）
+  whitelist:
+    # 一级来源域名后缀/匹配项：国家与省市卫健部门、疾控机构、药监部门、世卫组织、权威学会与学术机构
+    tier1-domains:
+      - nhc.gov.cn
+      - chinacdc.cn
+      - cdc.gov.cn
+      - nmpa.gov.cn
+      - cde.org.cn
+      - nifdc.org.cn
+      - cdr-adr.org.cn
+      - who.int
+      - cma.org.cn
+      - cpma.org.cn
+      - cams.cn
+      - pumc.edu.cn
+      - catcm.ac.cn
+      - satcm.gov.cn
+      - cfdagov.com
+      - wjw.beijing.gov.cn
+      - wsjkw.sh.gov.cn
+      - wsjkw.gd.gov.cn
+      - wsjkw.zj.gov.cn
+      - wjw.jiangsu.gov.cn
+      - wsjkw.sc.gov.cn
+      - wjw.hubei.gov.cn
+      - wsjkw.SD.gov.cn
+      - wjw.henan.gov.cn
+      - wjw.hunan.gov.cn
+      - wjw.fujian.gov.cn
+      - wjw.ah.gov.cn
+      - wsjkw.cq.gov.cn
+      - wsjk.tj.gov.cn
+      - cdc.gov
+      - nih.gov
+    # 一级来源站点名称匹配词（须同时满足 .gov.cn 或 .org.cn 或 .edu.cn 或 .ac.cn 等非商业域名）
+    tier1-site-keywords:
+      - 卫生健康委
+      - 卫健委
+      - 疾病预防控制中心
+      - 疾控中心
+      - 药品监督管理局
+      - 药监局
+      - 药品审评中心
+      - 世界卫生组织
+      - 中华医学会
+      - 中华预防医学会
+      - 中国医学科学院
+      - 中国中医科学院
+      - 国家中医药管理局
+      - 中国营养学会
+    # 二级来源 - 三甲医院与重点医科大学官网域名
+    tier2-hospital-domains:
+      - pumch.cn
+      - wchscu.cn
+      - zs-hospital.sh.cn
+      - rjh.com.cn
+      - huashan.org.cn
+      - xyeyy.com
+      - xiangya.com.cn
+      - pkuhSC.cn
+      - bysy.edu.cn
+      - pkuph.cn
+      - pku6.com
+      - trhos.com
+      - bjtth.org
+      - xwhosp.com.cn
+      - anzhen.org
+      - fuwaihospital.org
+      - cicams.ac.cn
+      - chhosp.com
+      - xjtu1.com
+      - tjmu.edu.cn
+      - tjh.com.cn
+      - whuh.com
+      - sysucc.org.cn
+      - gzsums.net
+      - gdghospital.org.cn
+      - zy91.com
+      - srrsh.com
+      - zju.edu.cn
+      - bjmu.edu.cn
+      - shsmu.edu.cn
+      - fudan.edu.cn
+      - scu.edu.cn
+      - sysu.edu.cn
+      - csu.edu.cn
+      - hust.edu.cn
+      - ccmu.edu.cn
+      - smu.edu.cn
+      - njmu.edu.cn
+      - cmu.edu.cn
+      - hrbmu.edu.cn
+    # 二级来源 - 三甲医院与重点医科大学站点名称关键词
+    tier2-hospital-site-keywords:
+      - 医院
+      - 医科大学
+      - 医学院
+      - 协和
+      - 华西
+      - 瑞金
+      - 湘雅
+      - 华山
+      - 齐鲁医院
+      - 同济医院
+      - 南方医院
+    # 二级来源 - 主流媒体健康频道域名（界面需标注“媒体报道”）
+    tier2-media-domains:
+      - health.people.com.cn
+      - people.com.cn
+      - xinhuanet.com
+      - news.cn
+      - cctv.com
+      - cntv.cn
+      - gmw.cn
+      - jkb.com.cn
+      - chinanews.com.cn
+      - thepaper.cn
+      - cyol.com
+      - lifetimes.cn
+      - bjnews.com.cn
+      - caixin.com
+      - southcn.com
+      - shobserver.com
+    # 二级来源 - 主流媒体站点名称关键词（界面需标注“媒体报道”）
+    tier2-media-site-keywords:
+      - 人民网
+      - 人民日报
+      - 新华社
+      - 新华网
+      - 央视网
+      - 光明网
+      - 光明日报
+      - 健康报
+      - 生命时报
+      - 中国新闻网
+      - 澎湃新闻
+      - 中国青年报
+      - 新京报
+    # 二级来源 - 白名单内专业科普机构域名
+    tier2-science-domains:
+      - dxy.cn
+      - dxy.com
+      - guokr.com
+      - kepuchina.cn
+      - mvyxws.com
+      - dayi.org.cn
+      - baike.qq.com
+      - msdmanuals.cn
+      - mayoclinic.org
+      - uptodate.com
+      - medlive.cn
+      - haodf.com
+      - yxbaike.com
+    # 二级来源 - 白名单内专业科普机构站点名称关键词
+    tier2-science-site-keywords:
+      - 丁香医生
+      - 丁香园
+      - 果壳
+      - 科普中国
+      - 医学微视
+      - 腾讯医典
+      - 中国医药信息查询平台
+      - 默沙东诊疗手册
+      - 医脉通
+
+  # 合规与禁用词控制配置（对应需求 4.3、4.6、4.10）
+  compliance:
+    # 中性检索词禁止出现的诱导性或机构词汇
+    query-forbidden-words:
+      - 辟谣
+      - 谣言
+      - 骗局
+      - 假消息
+      - 流言
+      - 真相
+      - 卫健委
+      - 疾控中心
+      - 世卫组织
+      - 丁香医生
+      - 人民网
+      - 央视
+    # 说明文字禁用词替换表（禁止绝对化与背书式表述，统一替换为中性可信表述）
+    explanation-forbidden-replacements:
+      "权威机构": "可信来源"
+      "权威专家": "查证来源"
+      "权威": "可信来源"
+      "100%正确": "与证据相符"
+      "100%准确": "与证据相符"
+      "百分百正确": "与证据相符"
+      "绝对属实": "与证据相符"
+      "绝对正确": "与证据相符"
+      "绝对真实": "与证据相符"
+      "名医背书": "查证来源"
+      "专家背书": "查证来源"
+      "官方背书": "查证来源"
+      "零风险": "低风险"
+
