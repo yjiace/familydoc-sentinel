@@ -12,12 +12,13 @@ import org.springframework.context.annotation.Configuration;
 public class AiClientConfig {
 
     @Bean
-    public ChatClient chatClient(ChatClient.Builder builder) {
+    public ChatClient chatClient(ChatClient.Builder builder, AiTokenUsageAdvisor aiTokenUsageAdvisor) {
         return builder
                 .defaultOptions(
                         DeepSeekChatOptions.builder()
                                 .temperature(0.0)
                 )
+                .defaultAdvisors(aiTokenUsageAdvisor)
                 .build();
     }
 }

@@ -52,6 +52,9 @@ public class FactCheckService {
     private final SingleClaimVerifyService singleClaimVerifyService;
     private final ArticleSummaryGenerator articleSummaryGenerator;
     private final WsaSearchService wsaSearchService;
+    private final UserHistoryTaskService userHistoryTaskService;
+    private final UsageTrackingService usageTrackingService;
+    private final cn.smallyoung.familydocsentinel.repository.UserHistoryTaskRepository userHistoryTaskRepository;
 
     @Resource(name = "factCheckTaskExecutor")
     private Executor factCheckTaskExecutor;
@@ -67,8 +70,12 @@ public class FactCheckService {
         String rawText = request != null ? request.getText() : null;
         boolean ignoreHardRedFlag = request != null && request.isIgnoreHardRedFlag();
         boolean skipCache = request != null && request.isSkipCache();
+        Long userId = request != null ? request.getUserId() : null;
 
-        FactCheckContext context = new FactCheckContext(taskId, rawText, ignoreHardRedFlag, skipCache);
+        FactCheckContext context = new FactCheckContext(taskId, rawText, ignoreHardRedFlag, skipCache, userId);
+        if (userId != null) {
+            usageTrackingService.incrementTaskCount(userId);
+        }
 
         // 1. 同步执行前置责任链节点（输入清洗校验 -> 危急红线扫描 -> 缓存探测）
         for (FactCheckPipelineHandler handler : pipelineHandlers) {
@@ -77,6 +84,9 @@ public class FactCheckService {
                 if (!shouldContinue) {
                     // 命中危急红线 HARD 拦截或命中完整缓存，注册任务状态并直接返回短路结果
                     taskStateManager.registerTask(context);
+                    if (userId != null) {
+                        saveTaskSnapshot(context);
+                    }
                     return context.getResponse();
                 }
             }
@@ -104,6 +114,7 @@ public class FactCheckService {
      * 异步执行责任链中的耗时节点（意图分析 -> 论断拆解 -> 并行检索与裁决 -> 文章级摘要生成）
      */
     private void executeAsyncPipeline(FactCheckContext context) {
+        cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.set(context.getUserId(), context.getTaskId());
         try {
             for (FactCheckPipelineHandler handler : pipelineHandlers) {
                 if (!handler.isSynchronousPreCheck()) {
@@ -126,6 +137,37 @@ public class FactCheckService {
         } catch (Exception ex) {
             log.error("FactCheck async pipeline unexpected error: taskId={}", context.getTaskId(), ex);
             context.markFailed("核查服务暂时繁忙，请稍后再试");
+        } finally {
+            if (context.getUserId() != null) {
+                saveTaskSnapshot(context);
+            }
+            cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.clear();
+        }
+    }
+
+    /**
+     * 持久化当前任务的快照至数据库
+     */
+    private void saveTaskSnapshot(FactCheckContext context) {
+        try {
+            FactCheckTaskResponse resp = context.getResponse();
+            String claimsJson = resp.getClaims() != null ? com.alibaba.fastjson2.JSON.toJSONString(resp.getClaims()) : null;
+            String redFlagLevel = resp.getRedFlag() != null && resp.getRedFlag().getLevel() != null ?
+                    resp.getRedFlag().getLevel().name() : null;
+            userHistoryTaskService.saveOrUpdateTask(
+                    context.getUserId(),
+                    context.getTaskId(),
+                    context.getRawInput(),
+                    resp.getStatus(),
+                    resp.getArticleSummary(),
+                    resp.getTotalClaimCount(),
+                    claimsJson,
+                    redFlagLevel,
+                    context.getTokensUsed() != null ? context.getTokensUsed().get() : 0,
+                    context.getRequestSearchBudgetUsed() != null ? context.getRequestSearchBudgetUsed().get() : 0
+            );
+        } catch (Exception e) {
+            log.warn("保存任务历史快照失败: taskId={}, error={}", context.getTaskId(), e.getMessage());
         }
     }
 
@@ -136,9 +178,34 @@ public class FactCheckService {
      * @return 任务当前全量快照
      */
     public FactCheckTaskResponse getTaskStatus(String taskId) {
-        FactCheckContext context = taskStateManager.getTaskContext(taskId)
-                .orElseThrow(() -> BizException.of(HttpStatus.NOT_FOUND.value(), "未找到该核验任务或任务已过期"));
-        return context.getResponse();
+        return taskStateManager.getTaskContext(taskId)
+                .map(FactCheckContext::getResponse)
+                .orElseGet(() -> {
+                    // 若内存已过期，尝试从数据库恢复
+                    return userHistoryTaskRepository.findByTaskId(taskId)
+                            .map(history -> {
+                                List<ClaimItemDto> claims = null;
+                                if (history.getClaimsJson() != null && !history.getClaimsJson().isBlank()) {
+                                    try {
+                                        claims = com.alibaba.fastjson2.JSON.parseArray(history.getClaimsJson(), ClaimItemDto.class);
+                                    } catch (Exception ignored) {
+                                    }
+                                }
+                                return FactCheckTaskResponse.builder()
+                                        .taskId(history.getTaskId())
+                                        .status(history.getStatus())
+                                        .stage(TaskStage.FINISHED.getCode())
+                                        .stageDescription("核验已完成")
+                                        .progressPercent(100)
+                                        .articleSummary(history.getSummary())
+                                        .totalClaimCount(history.getClaimCount())
+                                        .completedClaimCount(history.getClaimCount())
+                                        .claims(claims)
+                                        .updatedAt(history.getUpdatedAt())
+                                        .build();
+                            })
+                            .orElseThrow(() -> BizException.of(HttpStatus.NOT_FOUND.value(), "未找到该核验任务或任务已过期"));
+                });
     }
 
     /**
@@ -208,6 +275,7 @@ public class FactCheckService {
         }
 
         CompletableFuture.runAsync(() -> {
+            cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.set(context.getUserId(), context.getTaskId());
             try {
                 // 若整次请求原检索预算已耗尽，为单条重试补充最多 3 次预算余量
                 int maxPerReq = 12;
@@ -224,6 +292,11 @@ public class FactCheckService {
             } catch (Exception e) {
                 log.error("Failed to retry claim [{}] in task [{}]", claimId, taskId, e);
                 context.markCompleted();
+            } finally {
+                if (context.getUserId() != null) {
+                    saveTaskSnapshot(context);
+                }
+                cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.clear();
             }
         }, factCheckTaskExecutor);
 

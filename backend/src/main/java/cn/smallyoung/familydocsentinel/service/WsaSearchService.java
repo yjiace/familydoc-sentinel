@@ -36,7 +36,6 @@ import java.util.function.Consumer;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WsaSearchService {
 
     /**
@@ -62,6 +61,24 @@ public class WsaSearchService {
     private final WsaClient wsaClient;
     private final FactCheckProperties properties;
     private final EvidenceAdmissionService evidenceAdmissionService;
+    private final UsageTrackingService usageTrackingService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public WsaSearchService(WsaClient wsaClient,
+                            FactCheckProperties properties,
+                            EvidenceAdmissionService evidenceAdmissionService,
+                            @org.springframework.beans.factory.annotation.Autowired(required = false) UsageTrackingService usageTrackingService) {
+        this.wsaClient = wsaClient;
+        this.properties = properties;
+        this.evidenceAdmissionService = evidenceAdmissionService;
+        this.usageTrackingService = usageTrackingService;
+    }
+
+    public WsaSearchService(WsaClient wsaClient,
+                            FactCheckProperties properties,
+                            EvidenceAdmissionService evidenceAdmissionService) {
+        this(wsaClient, properties, evidenceAdmissionService, null);
+    }
 
     /**
      * 当前统计自然日
@@ -265,6 +282,7 @@ public class WsaSearchService {
             req.setIndustry(industry);
         }
 
+        long searchStartTime = System.currentTimeMillis();
         try {
             SearchProResponse res = wsaClient.SearchPro(req);
             if (res == null || res.getPages() == null || res.getPages().length == 0) {
@@ -292,13 +310,23 @@ public class WsaSearchService {
             if (errCode.contains("AuthFailure") || errCode.contains("UnauthorizedOperation")) {
                 log.error("[WsaAuthAlert] 检索服务鉴权失败，请检查密钥配置! errorCode={}, requestId={}",
                         errCode, e.getRequestId());
-                return new SingleCallResult(false, Collections.emptyList(), "核查服务暂时受限，请稍后再试");
+                return new SingleCallResult(false, Collections.emptyList(), "检索服务鉴权失败，请检查密钥配置");
             }
             log.warn("WSA SearchPro SDK exception: industry={}, code={}, msg={}", industry, errCode, errMsg);
             return new SingleCallResult(false, Collections.emptyList(), "SDK_ERR:" + errCode + ":" + errMsg);
         } catch (Exception e) {
             log.warn("WSA SearchPro unexpected error: industry={}, msg={}", industry, e.getMessage());
             return new SingleCallResult(false, Collections.emptyList(), "TIMEOUT_OR_NET:" + e.getMessage());
+        } finally {
+            long cost = System.currentTimeMillis() - searchStartTime;
+            if (usageTrackingService != null) {
+                usageTrackingService.recordSearchUsage(
+                        cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.getUserId(),
+                        cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.getTaskId(),
+                        1,
+                        cost
+                );
+            }
         }
     }
 

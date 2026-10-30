@@ -112,19 +112,20 @@
       @cancel="showConsentModal = false"
     />
 
-    <!-- 本机 24 小时缓存历史记录抽屉 -->
+    <!-- 核验历史记录抽屉（统一使用 PostgreSQL 云端数据库持久化存储） -->
     <LocalHistoryDrawer
       :visible="showHistoryDrawer"
-      :entries="localHistoryEntries"
       @close="showHistoryDrawer = false"
-      @select="handleSelectHistoryEntry"
-      @clearAll="handleClearAllHistory"
+      @selectCloudTask="handleSelectCloudTask"
     />
+
+    <!-- 用户登录/注册一体化弹窗 -->
+    <AuthModal />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import HeroBanner from './components/HeroBanner.vue'
 import InputPanel from './components/InputPanel.vue'
 import RedFlagAlert from './components/RedFlagAlert.vue'
@@ -134,6 +135,8 @@ import ClaimCard from './components/ClaimCard.vue'
 import UnverifiedCollapse from './components/UnverifiedCollapse.vue'
 import ConsentModal from './components/ConsentModal.vue'
 import LocalHistoryDrawer from './components/LocalHistoryDrawer.vue'
+import AuthModal from './components/AuthModal.vue'
+import { refreshUserData, isLoggedIn, openAuthModal } from './utils/userState'
 
 import {
   cancelFactCheckTask,
@@ -144,18 +147,13 @@ import {
 import type {
   ClaimItemDto,
   FactCheckTaskResponse,
-  LocalCacheEntry,
   RedFlagResult
 } from './types/factcheck'
 import { scanRedFlagClient } from './utils/clientRedFlagScanner'
 import {
-  clearAllLocalCache,
-  findLocalCachedResult,
   hasConfirmedConsent,
-  loadValidCacheEntries,
   markConsentConfirmed,
-  preprocessInputText,
-  saveLocalCachedResult
+  preprocessInputText
 } from './utils/localCacheManager'
 
 const inputText = ref('听说经常吃黑木耳能软化血管降低血压，是真的吗？')
@@ -172,13 +170,32 @@ const globalErrorMessage = ref('')
 const showConsentModal = ref(false)
 const pendingVerifyOptions = ref<{ ignoreHardRedFlag: boolean; skipCache: boolean } | null>(null)
 const showHistoryDrawer = ref(false)
-const localHistoryEntries = ref<LocalCacheEntry[]>([])
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  refreshUserData()
+})
 
 watch(inputText, () => {
   if (inputValidationError.value) {
     inputValidationError.value = ''
+  }
+})
+
+// 监听登录态变化：当用户退出登录时，彻底清空当前页面上的全部查询数据与任务状态
+watch(isLoggedIn, (logged) => {
+  if (!logged) {
+    stopPolling()
+    isPolling.value = false
+    currentTask.value = null
+    clientRedFlag.value = null
+    globalErrorMessage.value = ''
+    retryingClaimId.value = null
+    isLocalCacheHit.value = false
+    showHistoryDrawer.value = false
+    inputValidationError.value = ''
+    inputText.value = ''
   }
 })
 
@@ -226,6 +243,12 @@ const displayedClaims = computed<ClaimItemDto[]>(() => {
 })
 
 async function handleTriggerVerify(ignoreHardRedFlag = false, skipCache = false) {
+  // 必须登录后才能使用本平台
+  if (!isLoggedIn.value) {
+    openAuthModal('login')
+    return
+  }
+
   inputValidationError.value = ''
   globalErrorMessage.value = ''
 
@@ -252,18 +275,6 @@ async function handleTriggerVerify(ignoreHardRedFlag = false, skipCache = false)
     return
   }
 
-  if (!skipCache) {
-    const cachedEntry = findLocalCachedResult(normalizedText)
-    if (cachedEntry) {
-      currentTask.value = cachedEntry.response
-      if (localRedFlag.level === 'warn' && currentTask.value) {
-        currentTask.value.redFlag = localRedFlag
-      }
-      isLocalCacheHit.value = true
-      return
-    }
-  }
-
   isLocalCacheHit.value = false
   isPolling.value = true
 
@@ -279,9 +290,7 @@ async function handleTriggerVerify(ignoreHardRedFlag = false, skipCache = false)
       startPolling(initialTask.taskId, normalizedText)
     } else {
       isPolling.value = false
-      if (initialTask.status === 'COMPLETED' && initialTask.allowClientCache) {
-        saveLocalCachedResult(normalizedText, initialTask)
-      }
+      refreshUserData()
     }
   } catch (err: any) {
     isPolling.value = false
@@ -314,9 +323,7 @@ function startPolling(taskId: string, rawTextForCache: string) {
         stopPolling()
         isPolling.value = false
         retryingClaimId.value = null
-        if (latest.status === 'COMPLETED' && latest.allowClientCache) {
-          saveLocalCachedResult(rawTextForCache, latest)
-        }
+        refreshUserData()
       }
     } catch (err: any) {
       stopPolling()
@@ -343,12 +350,18 @@ async function handleCancelTask() {
   try {
     const cancelledTask = await cancelFactCheckTask(taskId)
     currentTask.value = cancelledTask
+    refreshUserData()
   } catch (err: any) {
     globalErrorMessage.value = err?.message || '已取消当前核验任务'
   }
 }
 
 async function handleRetrySingleClaim(claimId: string) {
+  if (!isLoggedIn.value) {
+    openAuthModal('login')
+    return
+  }
+
   const taskId = currentTask.value?.taskId
   if (!taskId || !claimId) return
 
@@ -374,24 +387,37 @@ function handleClearInput() {
 }
 
 function openHistoryDrawer() {
-  localHistoryEntries.value = loadValidCacheEntries()
+  if (!isLoggedIn.value) {
+    openAuthModal('login')
+    return
+  }
   showHistoryDrawer.value = true
 }
 
-function handleSelectHistoryEntry(entry: LocalCacheEntry) {
+function handleSelectCloudTask(detail: any) {
   stopPolling()
   isPolling.value = false
-  inputText.value = entry.rawText
-  currentTask.value = entry.response
+  inputText.value = detail.originalText || ''
+  currentTask.value = {
+    taskId: detail.taskId,
+    status: detail.status || 'COMPLETED',
+    statusDescription: '核验已完成',
+    stage: 'FINISHED',
+    stageDescription: '核验已完成',
+    progressPercent: 100,
+    articleSummary: detail.summary,
+    claims: detail.claims || [],
+    totalClaimCount: detail.claimCount || (detail.claims ? detail.claims.length : 0),
+    completedClaimCount: detail.claimCount || (detail.claims ? detail.claims.length : 0),
+    unverifiedItems: [],
+    redFlag: null,
+    allowClientCache: true,
+    updatedAt: detail.createdAt
+  } as unknown as FactCheckTaskResponse
   clientRedFlag.value = null
   globalErrorMessage.value = ''
   isLocalCacheHit.value = true
   showHistoryDrawer.value = false
-}
-
-function handleClearAllHistory() {
-  clearAllLocalCache()
-  localHistoryEntries.value = []
 }
 
 onUnmounted(() => {
@@ -555,7 +581,8 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-@media (max-width: 960px), (max-height: 700px) {
+/* 当页面宽度不足时（<= 1024px），仅显示左侧内容，右侧内容不显示 */
+@media (max-width: 1024px) {
   .page-wrapper {
     height: auto;
     min-height: 100vh;
@@ -564,6 +591,24 @@ onUnmounted(() => {
 
   .workspace-container {
     flex-direction: column;
+  }
+
+  .result-panel-card {
+    display: none !important;
+  }
+
+  .workspace-container > :deep(.input-panel-card),
+  .workspace-container > * {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-height: 700px) and (min-width: 1025px) {
+  .page-wrapper {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
   }
 
   .result-scroll-content {

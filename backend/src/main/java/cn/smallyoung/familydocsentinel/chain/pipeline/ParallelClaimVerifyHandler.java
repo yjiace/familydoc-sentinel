@@ -61,9 +61,13 @@ public class ParallelClaimVerifyHandler implements FactCheckPipelineHandler {
         int taskTimeoutSec = Math.max(claimTimeoutSec, properties.getSearch().getTaskTimeoutSeconds());
         Semaphore concurrencyLimiter = new Semaphore(maxConcurrency);
 
+        final Long currentUserId = context.getUserId();
+        final String currentTaskId = context.getTaskId();
+
         List<CompletableFuture<Void>> futures = new ArrayList<>(claims.size());
         for (ClaimItemDto claim : claims) {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.set(currentUserId, currentTaskId);
                         boolean acquired = false;
                         try {
                             acquired = concurrencyLimiter.tryAcquire(claimTimeoutSec, TimeUnit.SECONDS);
@@ -79,6 +83,7 @@ public class ParallelClaimVerifyHandler implements FactCheckPipelineHandler {
                             if (acquired) {
                                 concurrencyLimiter.release();
                             }
+                            cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.clear();
                         }
                     }, claimVerifyExecutor)
                     .orTimeout(claimTimeoutSec, TimeUnit.SECONDS)

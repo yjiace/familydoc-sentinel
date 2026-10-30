@@ -15,6 +15,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import cn.smallyoung.familydocsentinel.security.RequireAuth;
 
 /**
  * 家医智核·流言粉碎 核心 REST 接口控制器
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RestController
 @ResponseSysResult
+@RequireAuth
 @RequestMapping("/api/v1/factcheck")
 public class FactCheckController {
 
@@ -61,9 +63,13 @@ public class FactCheckController {
 
         // 2. 兼容解析 FactCheckRequest JSON 或纯文本输入
         FactCheckRequest factCheckRequest = parseFactCheckRequest(rawBody);
+        Long currentUserId = cn.smallyoung.familydocsentinel.security.UserContext.getUserId();
+        if (currentUserId != null) {
+            factCheckRequest.setUserId(currentUserId);
+        }
 
         // 3. 生成唯一任务 ID 并触发责任链（同步前置节点 + 异步核验节点）
-        String taskId = "t-" + IdUtil.getSeataSnowflake();
+        String taskId = "t-" + IdUtil.getSeataSnowflakeNextIdStr();
         return factCheckService.submitTask(taskId, factCheckRequest);
     }
 

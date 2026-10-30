@@ -4,6 +4,7 @@ import type {
   RedFlagResult,
   SysResult
 } from '../types/factcheck'
+import { setAuthToken, openAuthModal } from '../utils/userState'
 
 /**
  * 家医智核·流言粉碎 后端接口请求服务
@@ -27,12 +28,16 @@ function ensureOnline(): void {
 async function requestJson<T>(url: string, options: RequestInit): Promise<T> {
   ensureOnline()
 
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('familydoc_auth_token') : null
+  const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+
   let response: Response
   try {
     response = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json;charset=UTF-8',
+        ...authHeader,
         ...(options.headers || {})
       }
     })
@@ -41,11 +46,23 @@ async function requestJson<T>(url: string, options: RequestInit): Promise<T> {
     throw new Error('网络连接异常，请检查网络或稍后再试')
   }
 
+  if (response.status === 401) {
+    setAuthToken(null)
+    openAuthModal('login')
+    throw new Error('登录已失效或尚未登录，请先登录')
+  }
+
   let body: SysResult<T>
   try {
     body = (await response.json()) as SysResult<T>
   } catch (err) {
     throw new Error('服务响应格式异常，请稍后再试')
+  }
+
+  if (body?.code === 401) {
+    setAuthToken(null)
+    openAuthModal('login')
+    throw new Error(body?.message || '请先登录')
   }
 
   if (!body || body.code !== 200) {

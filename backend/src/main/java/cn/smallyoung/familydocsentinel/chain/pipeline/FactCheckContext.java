@@ -64,9 +64,19 @@ public class FactCheckContext {
     private final AtomicInteger requestSearchBudgetUsed = new AtomicInteger(0);
 
     /**
+     * 本次任务累计消耗的大模型 Token 总数
+     */
+    private final AtomicInteger tokensUsed = new AtomicInteger(0);
+
+    /**
      * 任务取消令牌（对应需求 US-01“核验中可取消”）
      */
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
+
+    /**
+     * 当前提交任务的用户 ID（未登录为 null）
+     */
+    private Long userId;
 
     /**
      * 面向前端实时查询的任务状态与结果响应对象
@@ -74,10 +84,15 @@ public class FactCheckContext {
     private final FactCheckTaskResponse response;
 
     public FactCheckContext(String taskId, String rawInput, boolean ignoreHardRedFlag, boolean skipCache) {
+        this(taskId, rawInput, ignoreHardRedFlag, skipCache, null);
+    }
+
+    public FactCheckContext(String taskId, String rawInput, boolean ignoreHardRedFlag, boolean skipCache, Long userId) {
         this.taskId = taskId;
         this.rawInput = rawInput;
         this.ignoreHardRedFlag = ignoreHardRedFlag;
         this.skipCache = skipCache;
+        this.userId = userId;
         this.response = FactCheckTaskResponse.builder()
                 .taskId(taskId)
                 .status(TaskStatus.PROCESSING.getCode())

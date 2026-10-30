@@ -73,6 +73,15 @@ public class TaskStateManager {
     }
 
     /**
+     * 累加当前核验任务的模型 Token 消耗量
+     */
+    public void recordTaskTokens(String taskId, int tokens) {
+        if (taskId != null && tokens > 0) {
+            getTaskContext(taskId).ifPresent(ctx -> ctx.getTokensUsed().addAndGet(tokens));
+        }
+    }
+
+    /**
      * 根据规范化全文指纹哈希（queryHash）探测已完成的核验缓存
      */
     public Optional<FactCheckTaskResponse> getCachedResultByHash(String queryHash) {

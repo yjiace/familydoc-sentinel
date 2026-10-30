@@ -23,7 +23,7 @@ public class AsyncConfig {
     /**
      * 核验任务主流程异步执行器
      */
-    @Bean("factCheckTaskExecutor")
+    @Bean({"factCheckTaskExecutor", "taskExecutor"})
     public Executor factCheckTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(8);

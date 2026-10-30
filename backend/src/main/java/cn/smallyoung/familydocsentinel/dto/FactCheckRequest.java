@@ -38,5 +38,10 @@ public class FactCheckRequest implements Serializable {
      * 是否跳过服务端高频缓存并强制重新核验（对应需求 US-09“重新核验”）
      */
     private boolean skipCache;
+
+    /**
+     * 当前提交任务的用户 ID（若已登录由上下文或请求带入）
+     */
+    private Long userId;
 }
 
