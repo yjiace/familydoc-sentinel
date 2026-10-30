@@ -38,7 +38,7 @@ ALTER TABLE user_history_task ADD COLUMN IF NOT EXISTS search_used INT NOT NULL 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_user_history_task_id ON user_history_task(task_id);
 CREATE INDEX IF NOT EXISTS idx_user_history_user_created ON user_history_task(user_id, created_at DESC);
 
--- 4. 用户用量累计统计表 (Token与元宝搜索)
+-- 4. 用户用量累计统计表 (Token与元宝搜索，含日/周/月双链额度统计)
 CREATE TABLE IF NOT EXISTS sys_user_usage_stat (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL UNIQUE REFERENCES sys_user(id) ON DELETE CASCADE,
@@ -47,8 +47,39 @@ CREATE TABLE IF NOT EXISTS sys_user_usage_stat (
     total_tokens BIGINT NOT NULL DEFAULT 0,
     total_search_count BIGINT NOT NULL DEFAULT 0,
     task_count INT NOT NULL DEFAULT 0,
+    daily_tokens BIGINT NOT NULL DEFAULT 0,
+    weekly_tokens BIGINT NOT NULL DEFAULT 0,
+    monthly_tokens BIGINT NOT NULL DEFAULT 0,
+    daily_search_count BIGINT NOT NULL DEFAULT 0,
+    weekly_search_count BIGINT NOT NULL DEFAULT 0,
+    monthly_search_count BIGINT NOT NULL DEFAULT 0,
+    daily_period_date DATE,
+    weekly_period_date DATE,
+    monthly_period_date DATE,
+    daily_token_limit BIGINT,
+    weekly_token_limit BIGINT,
+    monthly_token_limit BIGINT,
+    daily_search_limit BIGINT,
+    weekly_search_limit BIGINT,
+    monthly_search_limit BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS daily_tokens BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS weekly_tokens BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS monthly_tokens BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS daily_search_count BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS weekly_search_count BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS monthly_search_count BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS daily_period_date DATE;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS weekly_period_date DATE;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS monthly_period_date DATE;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS daily_token_limit BIGINT;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS weekly_token_limit BIGINT;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS monthly_token_limit BIGINT;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS daily_search_limit BIGINT;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS weekly_search_limit BIGINT;
+ALTER TABLE sys_user_usage_stat ADD COLUMN IF NOT EXISTS monthly_search_limit BIGINT;
 
 -- 5. 服务调用审计流水日志表
 CREATE TABLE IF NOT EXISTS sys_usage_log (

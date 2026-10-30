@@ -295,6 +295,7 @@ async function handleTriggerVerify(ignoreHardRedFlag = false, skipCache = false)
   } catch (err: any) {
     isPolling.value = false
     globalErrorMessage.value = err?.message || '核验请求失败，请稍后再试'
+    refreshUserData()
   }
 }
 
@@ -375,6 +376,7 @@ async function handleRetrySingleClaim(claimId: string) {
   } catch (err: any) {
     retryingClaimId.value = null
     globalErrorMessage.value = err?.message || '单条重试请求失败，请稍后再试'
+    refreshUserData()
   }
 }
 

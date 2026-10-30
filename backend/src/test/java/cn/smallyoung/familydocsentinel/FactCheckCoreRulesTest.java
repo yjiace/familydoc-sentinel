@@ -445,4 +445,92 @@ class FactCheckCoreRulesTest {
         assertTrue(summary.contains("文中含与依据矛盾的说法，转发前请留意"));
         assertTrue(summary.contains("文中有涉及个人用药的问题，请咨询医生或药师"));
     }
+
+    @Test
+    @DisplayName("双链额度（Token & 元宝搜索 · 每日/每周/每月）短板熔断与跨期重置测试")
+    void testUserDualChainQuotaDailyWeeklyMonthly() throws Exception {
+        UsageTrackingService usageService = new UsageTrackingService();
+        cn.smallyoung.familydocsentinel.entity.UserUsageStatEntity stat =
+                cn.smallyoung.familydocsentinel.entity.UserUsageStatEntity.builder()
+                        .id(1L)
+                        .userId(100L)
+                        .dailyPeriodDate(java.time.LocalDate.now())
+                        .weeklyPeriodDate(java.time.LocalDate.now().with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)))
+                        .monthlyPeriodDate(java.time.LocalDate.now().with(java.time.temporal.TemporalAdjusters.firstDayOfMonth()))
+                        .dailyTokens(1000L)
+                        .weeklyTokens(5000L)
+                        .monthlyTokens(10000L)
+                        .dailySearchCount(5L)
+                        .weeklySearchCount(20L)
+                        .monthlySearchCount(50L)
+                        .build();
+
+        cn.smallyoung.familydocsentinel.repository.UserUsageStatRepository mockStatRepo =
+                (cn.smallyoung.familydocsentinel.repository.UserUsageStatRepository) java.lang.reflect.Proxy.newProxyInstance(
+                        cn.smallyoung.familydocsentinel.repository.UserUsageStatRepository.class.getClassLoader(),
+                        new Class[]{cn.smallyoung.familydocsentinel.repository.UserUsageStatRepository.class},
+                        (proxy, method, args) -> {
+                            if ("findByUserId".equals(method.getName())) {
+                                return java.util.Optional.of(stat);
+                            }
+                            if ("save".equals(method.getName())) {
+                                return args[0];
+                            }
+                            return null;
+                        }
+                );
+
+        java.lang.reflect.Field repoField = UsageTrackingService.class.getDeclaredField("userUsageStatRepository");
+        repoField.setAccessible(true);
+        repoField.set(usageService, mockStatRepo);
+
+        java.lang.reflect.Field propField = UsageTrackingService.class.getDeclaredField("factCheckProperties");
+        propField.setAccessible(true);
+        propField.set(usageService, properties);
+
+        // 1. 额度充足时正常通过
+        assertDoesNotThrow(() -> usageService.checkUserQuotaAvailable(100L));
+
+        // 2. 每日 Token 额度耗尽 -> 停止服务
+        stat.setDailyTokens(50000L);
+        cn.smallyoung.familydocsentinel.exception.BizException ex1 = assertThrows(
+                cn.smallyoung.familydocsentinel.exception.BizException.class,
+                () -> usageService.checkUserQuotaAvailable(100L)
+        );
+        assertTrue(ex1.getMessage().contains("今日 Token 额度已用完"));
+
+        // 3. 每日元宝搜索额度耗尽 -> 停止服务
+        stat.setDailyTokens(1000L);
+        stat.setDailySearchCount(30L);
+        cn.smallyoung.familydocsentinel.exception.BizException ex2 = assertThrows(
+                cn.smallyoung.familydocsentinel.exception.BizException.class,
+                () -> usageService.checkUserQuotaAvailable(100L)
+        );
+        assertTrue(ex2.getMessage().contains("今日元宝搜索次数额度已用完"));
+
+        // 4. 每周元宝搜索额度耗尽 -> 停止服务
+        stat.setDailySearchCount(5L);
+        stat.setWeeklySearchCount(120L);
+        cn.smallyoung.familydocsentinel.exception.BizException ex3 = assertThrows(
+                cn.smallyoung.familydocsentinel.exception.BizException.class,
+                () -> usageService.checkUserQuotaAvailable(100L)
+        );
+        assertTrue(ex3.getMessage().contains("本周元宝搜索次数额度已用完"));
+
+        // 5. 每月 Token 额度耗尽 -> 停止服务
+        stat.setWeeklySearchCount(20L);
+        stat.setMonthlyTokens(500000L);
+        cn.smallyoung.familydocsentinel.exception.BizException ex4 = assertThrows(
+                cn.smallyoung.familydocsentinel.exception.BizException.class,
+                () -> usageService.checkUserQuotaAvailable(100L)
+        );
+        assertTrue(ex4.getMessage().contains("本月 Token 额度已用完"));
+
+        // 6. 跨日自动重置：昨日满额但在新自然日访问时自动归零恢复服务
+        stat.setMonthlyTokens(10000L);
+        stat.setDailySearchCount(30L);
+        stat.setDailyPeriodDate(java.time.LocalDate.now().minusDays(1));
+        assertDoesNotThrow(() -> usageService.checkUserQuotaAvailable(100L));
+        assertEquals(0L, stat.getDailySearchCount());
+    }
 }

@@ -72,6 +72,11 @@ public class FactCheckService {
         boolean skipCache = request != null && request.isSkipCache();
         Long userId = request != null ? request.getUserId() : null;
 
+        // 前置校验用户双链额度（Token 与元宝搜索次数，日/周/月任一耗尽即停止服务）
+        if (userId != null) {
+            usageTrackingService.checkUserQuotaAvailable(userId);
+        }
+
         FactCheckContext context = new FactCheckContext(taskId, rawText, ignoreHardRedFlag, skipCache, userId);
         if (userId != null) {
             usageTrackingService.incrementTaskCount(userId);
@@ -121,6 +126,9 @@ public class FactCheckService {
                     if (context.isCancelled()) {
                         log.info("FactCheck task [{}] cancelled by user, stopping pipeline", context.getTaskId());
                         return;
+                    }
+                    if (context.getUserId() != null) {
+                        usageTrackingService.checkUserQuotaAvailable(context.getUserId());
                     }
                     boolean shouldContinue = handler.handle(context);
                     if (!shouldContinue) {
@@ -251,6 +259,13 @@ public class FactCheckService {
             throw BizException.of(HttpStatus.BAD_REQUEST.value(), "该条论断已核验完成，无需重复重试");
         }
 
+        // 检查用户双链额度（Token 与元宝搜索次数，日/周/月任一耗尽即停止服务）
+        Long currentUserId = cn.smallyoung.familydocsentinel.security.UserContext.getUserId();
+        Long quotaUserId = currentUserId != null ? currentUserId : context.getUserId();
+        if (quotaUserId != null) {
+            usageTrackingService.checkUserQuotaAvailable(quotaUserId);
+        }
+
         // 检查全局日度检索额度是否充足
         wsaSearchService.checkDailyQuotaAvailable();
 
@@ -283,12 +298,14 @@ public class FactCheckService {
                     context.getRequestSearchBudgetUsed().set(Math.max(0, maxPerReq - 3));
                 }
                 singleClaimVerifyService.verifySingleClaim(context, targetClaim);
-                String updatedSummary = articleSummaryGenerator.generateSummary(
-                        context.getResponse().getClaims(),
-                        context.getResponse().getUnverifiedItems());
-                context.getResponse().setArticleSummary(updatedSummary);
-                context.markCompleted();
-                taskStateManager.cacheCompletedResultIfEligible(context.getResponse());
+                if (!TaskStatus.FAILED.getCode().equals(context.getResponse().getStatus())) {
+                    String updatedSummary = articleSummaryGenerator.generateSummary(
+                            context.getResponse().getClaims(),
+                            context.getResponse().getUnverifiedItems());
+                    context.getResponse().setArticleSummary(updatedSummary);
+                    context.markCompleted();
+                    taskStateManager.cacheCompletedResultIfEligible(context.getResponse());
+                }
             } catch (Exception e) {
                 log.error("Failed to retry claim [{}] in task [{}]", claimId, taskId, e);
                 context.markCompleted();

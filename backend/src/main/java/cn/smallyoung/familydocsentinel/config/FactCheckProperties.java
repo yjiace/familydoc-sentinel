@@ -46,6 +46,44 @@ public class FactCheckProperties {
      */
     private Compliance compliance = new Compliance();
 
+    /**
+     * 用户级双链额度配置（Token 消耗与元宝搜索次数，分为每日、每周、每月）
+     */
+    private UserQuota userQuota = new UserQuota();
+
+    @Data
+    public static class UserQuota {
+        /**
+         * 每日单用户大模型 Token 额度上限，默认 50,000
+         */
+        private long dailyTokenLimit = 50000L;
+
+        /**
+         * 每周单用户大模型 Token 额度上限，默认 200,000
+         */
+        private long weeklyTokenLimit = 200000L;
+
+        /**
+         * 每月单用户大模型 Token 额度上限，默认 500,000
+         */
+        private long monthlyTokenLimit = 500000L;
+
+        /**
+         * 每日单用户元宝搜索次数额度上限，默认 30 次
+         */
+        private long dailySearchLimit = 30L;
+
+        /**
+         * 每周单用户元宝搜索次数额度上限，默认 120 次
+         */
+        private long weeklySearchLimit = 120L;
+
+        /**
+         * 每月单用户元宝搜索次数额度上限，默认 300 次
+         */
+        private long monthlySearchLimit = 300L;
+    }
+
     @Data
     public static class Search {
         /**

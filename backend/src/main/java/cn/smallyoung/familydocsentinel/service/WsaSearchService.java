@@ -249,14 +249,27 @@ public class WsaSearchService {
             AtomicInteger requestBudgetUsed,
             int maxPerClaim) {
 
-        // 1. 检查单论断预算上限（<=3）
+        // 1. 校验当前用户双链额度（Token 与元宝搜索次数，日/周/月任一耗尽即停止服务）
+        Long currentUserId = cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.getUserId();
+        if (currentUserId == null) {
+            currentUserId = cn.smallyoung.familydocsentinel.security.UserContext.getUserId();
+        }
+        if (usageTrackingService != null && currentUserId != null) {
+            try {
+                usageTrackingService.checkUserQuotaAvailable(currentUserId);
+            } catch (BizException quotaEx) {
+                return new SingleCallResult(false, Collections.emptyList(), quotaEx.getMessage());
+            }
+        }
+
+        // 2. 检查单论断预算上限（<=3）
         int currentClaimCalls = claimCallsUsed.incrementAndGet();
         if (currentClaimCalls > maxPerClaim) {
             claimCallsUsed.decrementAndGet();
             return new SingleCallResult(false, Collections.emptyList(), "超过单论断检索次数上限");
         }
 
-        // 2. 检查单次请求总预算上限（<=12）
+        // 3. 检查单次请求总预算上限（<=12）
         int maxPerRequest = properties.getSearch().getMaxPerRequest();
         int currentReqCalls = requestBudgetUsed.incrementAndGet();
         if (currentReqCalls > maxPerRequest) {
@@ -266,7 +279,7 @@ public class WsaSearchService {
             return new SingleCallResult(false, Collections.emptyList(), "超过单次请求总检索预算上限");
         }
 
-        // 3. 检查并扣减每日全局额度（达 80% 告警，达 100% 阻断）
+        // 4. 检查并扣减每日全局额度（达 80% 告警，达 100% 阻断）
         if (!tryAcquireDailyQuota()) {
             requestBudgetUsed.decrementAndGet();
             claimCallsUsed.decrementAndGet();
@@ -321,7 +334,7 @@ public class WsaSearchService {
             long cost = System.currentTimeMillis() - searchStartTime;
             if (usageTrackingService != null) {
                 usageTrackingService.recordSearchUsage(
-                        cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.getUserId(),
+                        currentUserId,
                         cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.getTaskId(),
                         1,
                         cost

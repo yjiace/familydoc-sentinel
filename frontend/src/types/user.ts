@@ -28,6 +28,20 @@ export interface UserUsage {
   totalCompletionTokens: number
   totalSearchCount: number
   taskCount: number
+  dailyTokensUsed: number
+  dailyTokenLimit: number
+  dailySearchUsed: number
+  dailySearchLimit: number
+  weeklyTokensUsed: number
+  weeklyTokenLimit: number
+  weeklySearchUsed: number
+  weeklySearchLimit: number
+  monthlyTokensUsed: number
+  monthlyTokenLimit: number
+  monthlySearchUsed: number
+  monthlySearchLimit: number
+  quotaExceeded: boolean
+  quotaExceededReason?: string
   updatedAt?: string
 }
 

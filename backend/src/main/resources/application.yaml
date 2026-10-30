@@ -108,6 +108,21 @@ factcheck:
     # 学术类行业检索开关（默认关闭，实测覆盖率不足时开启）
     enable-academic: false
 
+  # 用户双链额度控制配置（Token 消耗与元宝搜索次数，任一维度任一周期耗尽即停止服务）
+  user-quota:
+    # 每日单用户 Token 额度上限
+    daily-token-limit: ${USER_DAILY_TOKEN_LIMIT:50000}
+    # 每周单用户 Token 额度上限
+    weekly-token-limit: ${USER_WEEKLY_TOKEN_LIMIT:200000}
+    # 每月单用户 Token 额度上限
+    monthly-token-limit: ${USER_MONTHLY_TOKEN_LIMIT:500000}
+    # 每日单用户元宝搜索次数额度上限
+    daily-search-limit: ${USER_DAILY_SEARCH_LIMIT:30}
+    # 每周单用户元宝搜索次数额度上限
+    weekly-search-limit: ${USER_WEEKLY_SEARCH_LIMIT:120}
+    # 每月单用户元宝搜索次数额度上限
+    monthly-search-limit: ${USER_MONTHLY_SEARCH_LIMIT:300}
+
   # 缓存与任务状态保持配置（对应需求 3.2、4.9、4.10）
   cache:
     # 活跃任务状态与重试上下文在内存中的保留时长（分钟）

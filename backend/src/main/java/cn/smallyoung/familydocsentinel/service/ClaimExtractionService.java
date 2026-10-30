@@ -301,6 +301,8 @@ public class ClaimExtractionService {
                     .call()
                     .content();
             return text != null ? text.strip() : null;
+        } catch (cn.smallyoung.familydocsentinel.exception.BizException bizEx) {
+            throw bizEx;
         } catch (Exception e) {
             log.warn("Failed to compress query by model: {}", longQuery, e);
             return null;
@@ -327,6 +329,8 @@ public class ClaimExtractionService {
                     }
                 }
                 log.warn("ClaimExtraction model output format invalid on attempt {}, raw={}", attempt + 1, raw);
+            } catch (cn.smallyoung.familydocsentinel.exception.BizException bizEx) {
+                throw bizEx;
             } catch (Exception e) {
                 log.warn("ClaimExtraction model call error on attempt {}", attempt + 1, e);
             }

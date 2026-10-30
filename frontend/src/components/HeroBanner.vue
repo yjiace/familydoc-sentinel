@@ -155,16 +155,23 @@
 
         <!-- 已登录状态 -->
         <div v-else class="user-logged-profile" ref="dropdownRef">
-          <div class="user-pill-card" @click.stop="toggleDropdown">
-            <div class="user-avatar-badge">
+          <div class="user-pill-card" :class="{ 'is-quota-exceeded': userUsage?.quotaExceeded }" @click.stop="toggleDropdown">
+            <div class="user-avatar-badge" :class="{ 'avatar-exceeded': userUsage?.quotaExceeded }">
               {{ (currentUser?.nickname || currentUser?.email || '用')[0].toUpperCase() }}
             </div>
             <div class="user-info-text">
-              <span class="user-name-title">{{ currentUser?.nickname || currentUser?.email }}</span>
+              <div class="user-name-row">
+                <span class="user-name-title">{{ currentUser?.nickname || currentUser?.email }}</span>
+                <span v-if="userUsage?.quotaExceeded" class="pill-stop-tag">停止服务</span>
+              </div>
               <div class="user-usage-micro">
-                <span class="usage-token-badge">Token: {{ formatTokens(userUsage?.totalTokens || 0) }}</span>
+                <span class="usage-token-badge" :class="{ 'text-danger': isLimitReached(userUsage?.dailyTokensUsed, userUsage?.dailyTokenLimit) }">
+                  今日Token: {{ formatTokens(userUsage?.dailyTokensUsed || 0) }}/{{ formatTokens(userUsage?.dailyTokenLimit || 50000) }}
+                </span>
                 <span class="usage-dot">·</span>
-                <span class="usage-search-badge">搜索: {{ userUsage?.totalSearchCount || 0 }}次</span>
+                <span class="usage-search-badge" :class="{ 'text-danger': isLimitReached(userUsage?.dailySearchUsed, userUsage?.dailySearchLimit) }">
+                  搜索: {{ userUsage?.dailySearchUsed || 0 }}/{{ userUsage?.dailySearchLimit || 30 }}次
+                </span>
               </div>
             </div>
             <svg
@@ -185,16 +192,146 @@
           <div v-if="isDropdownOpen" class="user-dropdown-menu" @click.stop>
             <div class="dropdown-header">
               <div class="dropdown-email" :title="currentUser?.email">{{ currentUser?.email }}</div>
-              <div class="dropdown-role-tag">已登录</div>
+              <div class="dropdown-role-tag" :class="{ 'tag-danger': userUsage?.quotaExceeded }">
+                {{ userUsage?.quotaExceeded ? '额度已满' : '服务正常' }}
+              </div>
             </div>
+
+            <!-- 额度耗尽停止服务告警 -->
+            <div v-if="userUsage?.quotaExceeded" class="quota-exceeded-banner">
+              {{ userUsage.quotaExceededReason || '您的双链额度已用完，已暂停核验服务' }}
+            </div>
+
+            <!-- 双链三周期额度详情 -->
+            <div class="quota-periods-section">
+              <div class="quota-section-title">双链额度用量（满额即停）</div>
+
+              <!-- 每日额度 -->
+              <div class="quota-period-card">
+                <div class="period-header">
+                  <span class="period-badge">每日额度</span>
+                  <span
+                    class="period-status"
+                    :class="isPeriodExceeded('daily') ? 'status-stop' : 'status-ok'"
+                  >
+                    {{ isPeriodExceeded('daily') ? '已满额' : '正常' }}
+                  </span>
+                </div>
+                <div class="chain-row">
+                  <div class="chain-label-line">
+                    <span>Token 消耗</span>
+                    <span class="chain-nums">{{ formatTokens(userUsage?.dailyTokensUsed || 0) }} / {{ formatTokens(userUsage?.dailyTokenLimit || 50000) }}</span>
+                  </div>
+                  <div class="chain-progress-track">
+                    <div
+                      class="chain-progress-fill fill-token"
+                      :class="getProgressColorClass(userUsage?.dailyTokensUsed, userUsage?.dailyTokenLimit)"
+                      :style="{ width: getProgressPercent(userUsage?.dailyTokensUsed, userUsage?.dailyTokenLimit) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+                <div class="chain-row">
+                  <div class="chain-label-line">
+                    <span>元宝搜索</span>
+                    <span class="chain-nums">{{ userUsage?.dailySearchUsed || 0 }} / {{ userUsage?.dailySearchLimit || 30 }} 次</span>
+                  </div>
+                  <div class="chain-progress-track">
+                    <div
+                      class="chain-progress-fill fill-search"
+                      :class="getProgressColorClass(userUsage?.dailySearchUsed, userUsage?.dailySearchLimit)"
+                      :style="{ width: getProgressPercent(userUsage?.dailySearchUsed, userUsage?.dailySearchLimit) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 每周额度 -->
+              <div class="quota-period-card">
+                <div class="period-header">
+                  <span class="period-badge">每周额度</span>
+                  <span
+                    class="period-status"
+                    :class="isPeriodExceeded('weekly') ? 'status-stop' : 'status-ok'"
+                  >
+                    {{ isPeriodExceeded('weekly') ? '已满额' : '正常' }}
+                  </span>
+                </div>
+                <div class="chain-row">
+                  <div class="chain-label-line">
+                    <span>Token 消耗</span>
+                    <span class="chain-nums">{{ formatTokens(userUsage?.weeklyTokensUsed || 0) }} / {{ formatTokens(userUsage?.weeklyTokenLimit || 200000) }}</span>
+                  </div>
+                  <div class="chain-progress-track">
+                    <div
+                      class="chain-progress-fill fill-token"
+                      :class="getProgressColorClass(userUsage?.weeklyTokensUsed, userUsage?.weeklyTokenLimit)"
+                      :style="{ width: getProgressPercent(userUsage?.weeklyTokensUsed, userUsage?.weeklyTokenLimit) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+                <div class="chain-row">
+                  <div class="chain-label-line">
+                    <span>元宝搜索</span>
+                    <span class="chain-nums">{{ userUsage?.weeklySearchUsed || 0 }} / {{ userUsage?.weeklySearchLimit || 120 }} 次</span>
+                  </div>
+                  <div class="chain-progress-track">
+                    <div
+                      class="chain-progress-fill fill-search"
+                      :class="getProgressColorClass(userUsage?.weeklySearchUsed, userUsage?.weeklySearchLimit)"
+                      :style="{ width: getProgressPercent(userUsage?.weeklySearchUsed, userUsage?.weeklySearchLimit) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 每月额度 -->
+              <div class="quota-period-card">
+                <div class="period-header">
+                  <span class="period-badge">每月额度</span>
+                  <span
+                    class="period-status"
+                    :class="isPeriodExceeded('monthly') ? 'status-stop' : 'status-ok'"
+                  >
+                    {{ isPeriodExceeded('monthly') ? '已满额' : '正常' }}
+                  </span>
+                </div>
+                <div class="chain-row">
+                  <div class="chain-label-line">
+                    <span>Token 消耗</span>
+                    <span class="chain-nums">{{ formatTokens(userUsage?.monthlyTokensUsed || 0) }} / {{ formatTokens(userUsage?.monthlyTokenLimit || 500000) }}</span>
+                  </div>
+                  <div class="chain-progress-track">
+                    <div
+                      class="chain-progress-fill fill-token"
+                      :class="getProgressColorClass(userUsage?.monthlyTokensUsed, userUsage?.monthlyTokenLimit)"
+                      :style="{ width: getProgressPercent(userUsage?.monthlyTokensUsed, userUsage?.monthlyTokenLimit) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+                <div class="chain-row">
+                  <div class="chain-label-line">
+                    <span>元宝搜索</span>
+                    <span class="chain-nums">{{ userUsage?.monthlySearchUsed || 0 }} / {{ userUsage?.monthlySearchLimit || 300 }} 次</span>
+                  </div>
+                  <div class="chain-progress-track">
+                    <div
+                      class="chain-progress-fill fill-search"
+                      :class="getProgressColorClass(userUsage?.monthlySearchUsed, userUsage?.monthlySearchLimit)"
+                      :style="{ width: getProgressPercent(userUsage?.monthlySearchUsed, userUsage?.monthlySearchLimit) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="dropdown-stats-panel">
               <div class="stat-item">
                 <div class="stat-num">{{ formatTokens(userUsage?.totalTokens || 0) }}</div>
-                <div class="stat-label">Token 消耗</div>
+                <div class="stat-label">累计 Token</div>
               </div>
               <div class="stat-item">
                 <div class="stat-num">{{ userUsage?.totalSearchCount || 0 }}</div>
-                <div class="stat-label">元宝搜索</div>
+                <div class="stat-label">累计搜索</div>
               </div>
               <div class="stat-item">
                 <div class="stat-num">{{ userUsage?.taskCount || 0 }}</div>
@@ -267,12 +404,42 @@ onUnmounted(() => {
 
 function formatTokens(num: number): string {
   if (num >= 10000) {
-    return (num / 1000).toFixed(1) + 'k'
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
   }
   if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'k'
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
   }
   return num.toString()
+}
+
+function isLimitReached(used?: number, limit?: number): boolean {
+  if (!limit || limit <= 0) return false
+  return (used || 0) >= limit
+}
+
+function isPeriodExceeded(period: 'daily' | 'weekly' | 'monthly'): boolean {
+  const u = userUsage.value
+  if (!u) return false
+  if (period === 'daily') {
+    return isLimitReached(u.dailyTokensUsed, u.dailyTokenLimit) || isLimitReached(u.dailySearchUsed, u.dailySearchLimit)
+  }
+  if (period === 'weekly') {
+    return isLimitReached(u.weeklyTokensUsed, u.weeklyTokenLimit) || isLimitReached(u.weeklySearchUsed, u.weeklySearchLimit)
+  }
+  return isLimitReached(u.monthlyTokensUsed, u.monthlyTokenLimit) || isLimitReached(u.monthlySearchUsed, u.monthlySearchLimit)
+}
+
+function getProgressPercent(used?: number, limit?: number): number {
+  if (!limit || limit <= 0) return 0
+  const pct = Math.round(((used || 0) / limit) * 100)
+  return Math.max(0, Math.min(100, pct))
+}
+
+function getProgressColorClass(used?: number, limit?: number): string {
+  const pct = getProgressPercent(used, limit)
+  if (pct >= 100) return 'bar-danger'
+  if (pct >= 80) return 'bar-warn'
+  return ''
 }
 </script>
 
@@ -469,6 +636,11 @@ function formatTokens(num: number): string {
   transition: all 0.15s ease;
 }
 
+.user-pill-card.is-quota-exceeded {
+  border-color: #fca5a5;
+  background: #fff5f5;
+}
+
 .user-pill-card:hover {
   border-color: #cbd5e1;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
@@ -488,9 +660,19 @@ function formatTokens(num: number): string {
   flex-shrink: 0;
 }
 
+.user-avatar-badge.avatar-exceeded {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+}
+
 .user-info-text {
   display: flex;
   flex-direction: column;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .user-name-title {
@@ -502,6 +684,16 @@ function formatTokens(num: number): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pill-stop-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
 }
 
 .user-usage-micro {
@@ -523,6 +715,11 @@ function formatTokens(num: number): string {
   font-weight: 600;
 }
 
+.text-danger {
+  color: #dc2626 !important;
+  font-weight: 700;
+}
+
 .dropdown-chevron {
   color: #94a3b8;
   transition: transform 0.2s ease;
@@ -536,11 +733,11 @@ function formatTokens(num: number): string {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  width: 230px;
+  width: 288px;
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 14px 34px -4px rgba(15, 23, 42, 0.16);
   padding: 12px;
   z-index: 100;
   animation: fadeIn 0.15s ease-out;
@@ -560,7 +757,7 @@ function formatTokens(num: number): string {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .dropdown-email {
@@ -574,12 +771,131 @@ function formatTokens(num: number): string {
 
 .dropdown-role-tag {
   font-size: 10px;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 10px;
+  background: #ecfdf5;
+  color: #059669;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dropdown-role-tag.tag-danger {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.quota-exceeded-banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 7px 9px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.quota-periods-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.quota-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.quota-period-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.period-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.period-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.period-status {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.status-ok {
   background: #eff6ff;
   color: #2563eb;
+}
+
+.status-stop {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.chain-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chain-label-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+.chain-nums {
   font-weight: 600;
-  white-space: nowrap;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.chain-progress-track {
+  width: 100%;
+  height: 5px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.chain-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.fill-token {
+  background: #3b82f6;
+}
+
+.fill-search {
+  background: #0ea5e9;
+}
+
+.bar-warn {
+  background: #f59e0b !important;
+}
+
+.bar-danger {
+  background: #ef4444 !important;
 }
 
 .dropdown-stats-panel {
@@ -588,7 +904,7 @@ function formatTokens(num: number): string {
   gap: 6px;
   background: #f8fafc;
   border-radius: 8px;
-  padding: 8px 4px;
+  padding: 7px 4px;
   text-align: center;
 }
 

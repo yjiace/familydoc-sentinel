@@ -148,6 +148,115 @@
           <span>清空内容</span>
         </button>
       </div>
+
+      <!-- 用户双链额度（每日/每周/每月）常驻监控区 -->
+<!--      <div v-if="isLoggedIn && userUsage" class="quota-overview-box" :class="{ 'quota-box-exceeded': userUsage.quotaExceeded }">-->
+<!--        <div class="quota-box-header">-->
+<!--          <span class="quota-box-title">双链额度用量（满额停止服务）</span>-->
+<!--          <span class="quota-box-badge" :class="userUsage.quotaExceeded ? 'badge-stop' : 'badge-active'">-->
+<!--            {{ userUsage.quotaExceeded ? '额度已满 · 停止服务' : '额度正常' }}-->
+<!--          </span>-->
+<!--        </div>-->
+
+<!--        <div v-if="userUsage.quotaExceeded && userUsage.quotaExceededReason" class="quota-stop-reason">-->
+<!--          {{ userUsage.quotaExceededReason }}-->
+<!--        </div>-->
+
+<!--        <div class="quota-grid-table">-->
+<!--          &lt;!&ndash; 每日 &ndash;&gt;-->
+<!--          <div class="quota-col-item">-->
+<!--            <div class="quota-col-head">每日额度</div>-->
+<!--            <div class="quota-metric-line">-->
+<!--              <span class="metric-name">Token</span>-->
+<!--              <span class="metric-val" :class="{ 'val-over': isOver(userUsage.dailyTokensUsed, userUsage.dailyTokenLimit) }">-->
+<!--                {{ formatTokenNum(userUsage.dailyTokensUsed) }}/{{ formatTokenNum(userUsage.dailyTokenLimit || 50000) }}-->
+<!--              </span>-->
+<!--            </div>-->
+<!--            <div class="mini-bar">-->
+<!--              <div-->
+<!--                class="mini-bar-fill fill-blue"-->
+<!--                :class="barStateClass(userUsage.dailyTokensUsed, userUsage.dailyTokenLimit)"-->
+<!--                :style="{ width: calcPct(userUsage.dailyTokensUsed, userUsage.dailyTokenLimit) + '%' }"-->
+<!--              ></div>-->
+<!--            </div>-->
+<!--            <div class="quota-metric-line">-->
+<!--              <span class="metric-name">搜索</span>-->
+<!--              <span class="metric-val" :class="{ 'val-over': isOver(userUsage.dailySearchUsed, userUsage.dailySearchLimit) }">-->
+<!--                {{ userUsage.dailySearchUsed || 0 }}/{{ userUsage.dailySearchLimit || 30 }}次-->
+<!--              </span>-->
+<!--            </div>-->
+<!--            <div class="mini-bar">-->
+<!--              <div-->
+<!--                class="mini-bar-fill fill-cyan"-->
+<!--                :class="barStateClass(userUsage.dailySearchUsed, userUsage.dailySearchLimit)"-->
+<!--                :style="{ width: calcPct(userUsage.dailySearchUsed, userUsage.dailySearchLimit) + '%' }"-->
+<!--              ></div>-->
+<!--            </div>-->
+<!--          </div>-->
+
+<!--          &lt;!&ndash; 每周 &ndash;&gt;-->
+<!--          <div class="quota-col-item">-->
+<!--            <div class="quota-col-head">每周额度</div>-->
+<!--            <div class="quota-metric-line">-->
+<!--              <span class="metric-name">Token</span>-->
+<!--              <span class="metric-val" :class="{ 'val-over': isOver(userUsage.weeklyTokensUsed, userUsage.weeklyTokenLimit) }">-->
+<!--                {{ formatTokenNum(userUsage.weeklyTokensUsed) }}/{{ formatTokenNum(userUsage.weeklyTokenLimit || 200000) }}-->
+<!--              </span>-->
+<!--            </div>-->
+<!--            <div class="mini-bar">-->
+<!--              <div-->
+<!--                class="mini-bar-fill fill-blue"-->
+<!--                :class="barStateClass(userUsage.weeklyTokensUsed, userUsage.weeklyTokenLimit)"-->
+<!--                :style="{ width: calcPct(userUsage.weeklyTokensUsed, userUsage.weeklyTokenLimit) + '%' }"-->
+<!--              ></div>-->
+<!--            </div>-->
+<!--            <div class="quota-metric-line">-->
+<!--              <span class="metric-name">搜索</span>-->
+<!--              <span class="metric-val" :class="{ 'val-over': isOver(userUsage.weeklySearchUsed, userUsage.weeklySearchLimit) }">-->
+<!--                {{ userUsage.weeklySearchUsed || 0 }}/{{ userUsage.weeklySearchLimit || 120 }}次-->
+<!--              </span>-->
+<!--            </div>-->
+<!--            <div class="mini-bar">-->
+<!--              <div-->
+<!--                class="mini-bar-fill fill-cyan"-->
+<!--                :class="barStateClass(userUsage.weeklySearchUsed, userUsage.weeklySearchLimit)"-->
+<!--                :style="{ width: calcPct(userUsage.weeklySearchUsed, userUsage.weeklySearchLimit) + '%' }"-->
+<!--              ></div>-->
+<!--            </div>-->
+<!--          </div>-->
+
+<!--          &lt;!&ndash; 每月 &ndash;&gt;-->
+<!--          <div class="quota-col-item">-->
+<!--            <div class="quota-col-head">每月额度</div>-->
+<!--            <div class="quota-metric-line">-->
+<!--              <span class="metric-name">Token</span>-->
+<!--              <span class="metric-val" :class="{ 'val-over': isOver(userUsage.monthlyTokensUsed, userUsage.monthlyTokenLimit) }">-->
+<!--                {{ formatTokenNum(userUsage.monthlyTokensUsed) }}/{{ formatTokenNum(userUsage.monthlyTokenLimit || 500000) }}-->
+<!--              </span>-->
+<!--            </div>-->
+<!--            <div class="mini-bar">-->
+<!--              <div-->
+<!--                class="mini-bar-fill fill-blue"-->
+<!--                :class="barStateClass(userUsage.monthlyTokensUsed, userUsage.monthlyTokenLimit)"-->
+<!--                :style="{ width: calcPct(userUsage.monthlyTokensUsed, userUsage.monthlyTokenLimit) + '%' }"-->
+<!--              ></div>-->
+<!--            </div>-->
+<!--            <div class="quota-metric-line">-->
+<!--              <span class="metric-name">搜索</span>-->
+<!--              <span class="metric-val" :class="{ 'val-over': isOver(userUsage.monthlySearchUsed, userUsage.monthlySearchLimit) }">-->
+<!--                {{ userUsage.monthlySearchUsed || 0 }}/{{ userUsage.monthlySearchLimit || 300 }}次-->
+<!--              </span>-->
+<!--            </div>-->
+<!--            <div class="mini-bar">-->
+<!--              <div-->
+<!--                class="mini-bar-fill fill-cyan"-->
+<!--                :class="barStateClass(userUsage.monthlySearchUsed, userUsage.monthlySearchLimit)"-->
+<!--                :style="{ width: calcPct(userUsage.monthlySearchUsed, userUsage.monthlySearchLimit) + '%' }"-->
+<!--              ></div>-->
+<!--            </div>-->
+<!--          </div>-->
+<!--        </div>-->
+<!--      </div>-->
     </div>
 
     <!-- 左栏底部说明 -->
@@ -160,6 +269,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { isLoggedIn, userUsage } from '../utils/userState'
 
 const props = defineProps<{
   modelValue: string
@@ -210,6 +320,31 @@ function rotateExamples() {
 function selectExample(text: string) {
   if (props.loading) return
   emit('update:modelValue', text)
+}
+
+function formatTokenNum(num?: number): string {
+  const n = num || 0
+  if (n >= 1000) {
+    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  }
+  return n.toString()
+}
+
+function isOver(used?: number, limit?: number): boolean {
+  if (!limit || limit <= 0) return false
+  return (used || 0) >= limit
+}
+
+function calcPct(used?: number, limit?: number): number {
+  if (!limit || limit <= 0) return 0
+  return Math.max(0, Math.min(100, Math.round(((used || 0) / limit) * 100)))
+}
+
+function barStateClass(used?: number, limit?: number): string {
+  const pct = calcPct(used, limit)
+  if (pct >= 100) return 'mini-fill-danger'
+  if (pct >= 80) return 'mini-fill-warn'
+  return ''
 }
 </script>
 
@@ -502,6 +637,135 @@ function selectExample(text: string) {
   color: #94a3b8;
   line-height: 1.5;
   padding: 0 4px;
+}
+
+.quota-overview-box {
+  margin-top: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quota-overview-box.quota-box-exceeded {
+  background: #fff5f5;
+  border-color: #fecaca;
+}
+
+.quota-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.quota-box-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.quota-box-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.badge-active {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.badge-stop {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.quota-stop-reason {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 6px 8px;
+  line-height: 1.4;
+}
+
+.quota-grid-table {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.quota-col-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.quota-col-head {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.quota-metric-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.metric-val {
+  font-weight: 600;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.val-over {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.mini-bar {
+  width: 100%;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+
+.mini-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.fill-blue {
+  background: #3b82f6;
+}
+
+.fill-cyan {
+  background: #0ea5e9;
+}
+
+.mini-fill-warn {
+  background: #f59e0b !important;
+}
+
+.mini-fill-danger {
+  background: #ef4444 !important;
 }
 
 @media (max-width: 960px) {

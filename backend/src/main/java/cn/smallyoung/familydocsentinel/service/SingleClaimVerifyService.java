@@ -66,8 +66,12 @@ public class SingleClaimVerifyService {
                 return;
             }
 
-            // 3. 若检索因超时、限流或异常未能完成 -> 进入裁决规则顺序 1（待重试）
+            // 3. 若检索因超时、限流、额度耗尽或异常未能完成 -> 进入裁决规则顺序 1（待重试）
             if (searchOutcome.failedOrTimedOut()) {
+                if (searchOutcome.errorMessage() != null && searchOutcome.errorMessage().contains("额度已用完")) {
+                    context.getCancelled().set(true);
+                    context.markFailed(searchOutcome.errorMessage());
+                }
                 ClaimAdjudicationContext retryCtx = ClaimAdjudicationContext.builder()
                         .claim(claim)
                         .runtimeErrorOrTimeout(true)
@@ -114,6 +118,16 @@ public class SingleClaimVerifyService {
             claimAdjudicationEngine.adjudicate(adjContext);
             context.refreshParallelVerifyProgress();
 
+        } catch (cn.smallyoung.familydocsentinel.exception.BizException bizEx) {
+            log.warn("Business/Quota limit reached while verifying claim [{}]: {}", claim.getClaimId(), bizEx.getMessage());
+            context.getCancelled().set(true);
+            context.markFailed(bizEx.getMessage());
+            ClaimAdjudicationContext fallbackRetryCtx = ClaimAdjudicationContext.builder()
+                    .claim(claim)
+                    .runtimeErrorOrTimeout(true)
+                    .build();
+            claimAdjudicationEngine.adjudicate(fallbackRetryCtx);
+            context.refreshParallelVerifyProgress();
         } catch (Exception e) {
             log.warn("Unexpected error verifying claim [{}]: {}", claim.getClaimId(), e.getMessage(), e);
             ClaimAdjudicationContext fallbackRetryCtx = ClaimAdjudicationContext.builder()

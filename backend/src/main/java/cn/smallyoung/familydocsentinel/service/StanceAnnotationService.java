@@ -376,6 +376,8 @@ public class StanceAnnotationService {
                     }
                 }
                 log.warn("StanceAnnotation model format invalid on attempt {}, raw={}", attempt + 1, raw);
+            } catch (cn.smallyoung.familydocsentinel.exception.BizException bizEx) {
+                throw bizEx;
             } catch (Exception e) {
                 log.warn("StanceAnnotation model call error on attempt {}", attempt + 1, e);
             }

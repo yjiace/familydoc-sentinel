@@ -1,6 +1,7 @@
 package cn.smallyoung.familydocsentinel.service;
 
 import cn.smallyoung.familydocsentinel.dto.IntentAnalysisResult;
+import cn.smallyoung.familydocsentinel.exception.BizException;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import lombok.RequiredArgsConstructor;
@@ -136,6 +137,8 @@ public class UserIntentService {
                 return passThrough("模型返回为空，降级放行");
             }
             return parseModelResult(raw);
+        } catch (BizException bizEx) {
+            throw bizEx;
         } catch (Exception e) {
             // 降级兜底：模型异常时不误拦截用户，直接放行（同时保留堆栈便于排查）
             log.warn("Intent analysis model error, fallback to pass-through", e);
