@@ -1,7 +1,8 @@
 import type { HistoryTaskDetail, HistoryTaskSummary } from '../types/user'
 import type { SysResult } from '../types/factcheck'
+import { buildApiUrl } from './config'
 
-const BASE_HISTORY_URL = '/api/v1/history'
+const BASE_HISTORY_URL = buildApiUrl('/api/v1/history')
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('familydoc_auth_token')

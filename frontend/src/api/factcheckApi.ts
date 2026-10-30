@@ -5,13 +5,14 @@ import type {
   SysResult
 } from '../types/factcheck'
 import { setAuthToken, openAuthModal } from '../utils/userState'
+import { buildApiUrl } from './config'
 
 /**
  * 家医智核·流言粉碎 后端接口请求服务
  * 对接后端 FactCheckController (/api/v1/factcheck)
  */
 
-const BASE_URL = '/api/v1/factcheck'
+const BASE_URL = buildApiUrl('/api/v1/factcheck')
 
 /**
  * 检查浏览器当前是否处于联网状态（对应需求第 5 节：“当前无网络，请联网后再试”）

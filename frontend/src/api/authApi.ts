@@ -1,8 +1,9 @@
 import type { UserAuthResponse, UserProfile, UserUsage } from '../types/user'
 import type { SysResult } from '../types/factcheck'
+import { buildApiUrl } from './config'
 
-const BASE_AUTH_URL = '/api/v1/auth'
-const BASE_USER_URL = '/api/v1/user'
+const BASE_AUTH_URL = buildApiUrl('/api/v1/auth')
+const BASE_USER_URL = buildApiUrl('/api/v1/user')
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('familydoc_auth_token')

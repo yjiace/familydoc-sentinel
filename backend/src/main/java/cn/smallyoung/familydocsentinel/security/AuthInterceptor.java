@@ -24,6 +24,11 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // 放行跨域 CORS 预检请求（OPTIONS 请求不携带 Authorization 头）
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
         String token = resolveToken(request);
         Long userId = null;
         if (token != null) {
