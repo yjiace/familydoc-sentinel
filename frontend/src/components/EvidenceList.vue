@@ -25,6 +25,8 @@
                 </div>
                 <div class="meta-row">
                   <span class="meta-item">出处：<strong>{{ item.sourceOrg }}</strong></span>
+                  <span v-if="item.isVr" class="vr-badge">权威词条 VR</span>
+                  <span v-if="item.matchedSite" class="site-tag">定向官方</span>
                   <span class="meta-item">发布日期：{{ item.publishDate || '近期' }}</span>
                   <a
                     :href="item.url"
@@ -80,6 +82,8 @@
                 </div>
                 <div class="meta-row">
                   <span class="meta-item">出处：<strong>{{ item.sourceOrg }}</strong></span>
+                  <span v-if="item.isVr" class="vr-badge">权威词条 VR</span>
+                  <span v-if="item.matchedSite" class="site-tag">定向官方</span>
                   <span class="meta-item">发布日期：{{ item.publishDate || '近期' }}</span>
                   <a
                     :href="item.url"
@@ -153,6 +157,8 @@
 
             <div class="meta-row">
               <span class="meta-item">出处：<strong>{{ item.sourceOrg }}</strong></span>
+              <span v-if="item.isVr" class="vr-badge">权威词条 VR</span>
+              <span v-if="item.matchedSite" class="site-tag">定向官方</span>
               <span v-if="item.publishDate" class="meta-item">发布日期：{{ item.publishDate }}</span>
               <a
                 :href="item.url"
@@ -459,5 +465,25 @@ function getStanceIcon(item: EvidenceItemDto) {
   .conflict-columns {
     grid-template-columns: 1fr;
   }
+}
+
+.vr-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.site-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 </style>

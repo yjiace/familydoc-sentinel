@@ -72,6 +72,17 @@ public class WsaSearchPage implements Serializable {
      */
     private List<Deeplink> deeplinks;
 
+    /**
+     * 文档类型（如 VR 结构化卡片等）
+     */
+    @JsonAlias({"doc_type", "docType", "type"})
+    private String docType;
+
+    /**
+     * 命中的定向站点域名（如通过 Site 参数召回时内部透传）
+     */
+    private String matchedSite;
+
     @Data
     public static class Pic implements Serializable {
 

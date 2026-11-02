@@ -94,11 +94,13 @@ public class EvidenceAdmissionService {
                 continue;
             }
 
-            // 5. 计算相关度与排序分（排序分 = 相关度 × 等级系数）
+            // 5. 计算相关度与排序分（排序分 = 相关度 × 等级系数 × VR实体提权因子1.2）
             double relevanceScore = (page.getScore() != null && page.getScore() > 0)
                     ? Math.min(1.0, page.getScore())
                     : 0.6;
-            double rankScore = relevanceScore * classification.tier().getWeightFactor();
+            boolean isVr = isVrEntity(page, page.getSite(), page.getTitle());
+            double vrFactor = isVr ? 1.2 : 1.0;
+            double rankScore = relevanceScore * classification.tier().getWeightFactor() * vrFactor;
 
             // 6. 摘要按句截取至 800 字以内，日期格式化（缺失显示“日期未标注”）
             String truncatedSummary = truncateBySentence(rawSummary, MAX_SUMMARY_LENGTH);
@@ -120,6 +122,8 @@ public class EvidenceAdmissionService {
                     .sourceTag(classification.mediaReport() ? "媒体报道" : classification.tier().getLabel())
                     .relevanceScore(relevanceScore)
                     .rankScore(Math.round(rankScore * 10000.0) / 10000.0)
+                    .isVr(isVr)
+                    .matchedSite(page.getMatchedSite())
                     .build();
 
             admittedList.add(item);
@@ -372,5 +376,30 @@ public class EvidenceAdmissionService {
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
     }
-}
 
+    /**
+     * 判断当前检索页面是否属于腾讯元宝搜索 VR（View Result）结构化实体词条
+     *
+     * @param page  原始检索页面
+     * @param site  站点名称
+     * @param title 页面标题
+     * @return true 表示为权威 VR 结构化实体词条，享有 1.2x 排序提权
+     */
+    public boolean isVrEntity(WsaSearchPage page, String site, String title) {
+        if (page == null) {
+            return false;
+        }
+        if (page.getDeeplinks() != null && !page.getDeeplinks().isEmpty()) {
+            return true;
+        }
+        if (page.getDocType() != null) {
+            String lowerType = page.getDocType().toLowerCase();
+            if (lowerType.contains("vr") || lowerType.contains("card")) {
+                return true;
+            }
+        }
+        String combined = ((site != null ? site : "") + " " + (title != null ? title : "")).toLowerCase();
+        return combined.contains("百科") || combined.contains("词条") || combined.contains("诊疗手册")
+                || combined.contains("腾讯医典") || combined.contains("中国医药信息查询平台");
+    }
+}

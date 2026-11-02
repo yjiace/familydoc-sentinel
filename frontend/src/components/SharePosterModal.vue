@@ -106,7 +106,10 @@
                     class="evidence-mini-item"
                   >
                     <div class="evidence-source-line">
-                      <span class="evidence-org-name">{{ ev.sourceOrg || ev.title }}</span>
+                      <div class="source-left-meta">
+                        <span class="evidence-org-name">{{ ev.sourceOrg || ev.title }}</span>
+                        <span v-if="ev.isVr" class="vr-mini-tag">VR词条</span>
+                      </div>
                       <span class="evidence-tier-tag" :class="ev.tierCode === 'TIER_1' ? 'tier-1' : 'tier-2'">
                         {{ ev.tierCode === 'TIER_1' ? '一级官方' : '权威医学' }}
                       </span>
@@ -782,6 +785,22 @@ async function copyPosterToClipboard() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.source-left-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vr-mini-tag {
+  font-size: 9px;
+  font-weight: 800;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 0 4px;
+  border-radius: 3px;
 }
 
 .evidence-org-name {

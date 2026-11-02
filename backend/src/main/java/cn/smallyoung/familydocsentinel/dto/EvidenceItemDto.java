@@ -114,5 +114,15 @@ public class EvidenceItemDto implements Serializable {
      * 或当一级来源优先裁决时，另一方标注“口径不同”）
      */
     private String note;
+
+    /**
+     * 是否为腾讯元宝搜索 VR 结构化实体词条（Mode=2 召回的权威医疗百科/疾病/药品结构化卡片）
+     */
+    private boolean isVr;
+
+    /**
+     * 命中的精准定向权威站点域名（如通过 Site 参数召回的 nhc.gov.cn / chinacdc.cn / nmpa.gov.cn）
+     */
+    private String matchedSite;
 }
 

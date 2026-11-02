@@ -10,7 +10,6 @@ import com.tencentcloudapi.common.exception.TencentCloudSDKException;
 import com.tencentcloudapi.wsa.v20250508.WsaClient;
 import com.tencentcloudapi.wsa.v20250508.models.SearchProRequest;
 import com.tencentcloudapi.wsa.v20250508.models.SearchProResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -25,13 +24,11 @@ import java.util.function.Consumer;
 /**
  * 元宝搜索（WSA）检索策略与调用预算管控服务（对应需求文档 4.4、4.10、5 节）
  * <p>
- * 核心职责：
- * 1. 主检索：1 次，混合模式（Mode=2），取 20 条（Cnt=20），使用中性检索词，不传时效参数；
- * 2. 升级检索：主检索后准入证据不充分时，限定政府类行业（Industry="gov"）升级检索 1 次；
- * 3. 超时/5xx 重试：最多重试 1 次，且占用调用上限；
- * 4. 预算硬上限：单论断最多 3 次（含重试），单次请求总检索最多 12 次；
- * 5. 全局日度额度监控：达 80% 记录运维告警，耗尽时阻断外部调用并提示“今日核验额度已用完，请明天再试”；
- * 6. 鉴权失败保护：捕获 AuthFailure 错误码，不暴露密钥，记录告警并返回“核查服务暂时受限，请稍后再试”。
+ * 核心升级：
+ * 1. 自适应 Freshness：时效敏感词先以近半年（m6）探查最新指南，证据不足自适应回退全时段，兼顾时效与长效权威；
+ * 2. 精准 Site 定向：政务升级检索阶段按论断领域靶向定向国家药监局(nmpa.gov.cn)、中国疾控(chinacdc.cn)或国家卫健委(nhc.gov.cn)；
+ * 3. 结构化 Deeplinks：开启富媒体子链检索，支持权威词条 VR 实体提权；
+ * 4. 预算与双链熔断保持严格约束：单论断 <=3 次，单任务 <=12 次。
  * </p>
  */
 @Slf4j
@@ -80,29 +77,10 @@ public class WsaSearchService {
         this(wsaClient, properties, evidenceAdmissionService, null);
     }
 
-    /**
-     * 当前统计自然日
-     */
     private volatile LocalDate quotaDate = LocalDate.now();
-
-    /**
-     * 当日累计已调用检索次数
-     */
     private final AtomicInteger dailyUsedCount = new AtomicInteger(0);
-
-    /**
-     * 当日 80% 额度告警是否已触发标记
-     */
     private final AtomicBoolean dailyWarnLogged = new AtomicBoolean(false);
 
-    /**
-     * 单条论断检索执行汇总结果
-     *
-     * @param admittedEvidences 经过白名单准入、去重与排序后的前 4 条证据
-     * @param callsUsed         本条论断实际消耗的检索次数
-     * @param failedOrTimedOut  是否因检索超时、限流或服务异常导致检索未能正常完成
-     * @param errorMessage      异常或受限提示信息
-     */
     public record ClaimSearchOutcome(
             List<EvidenceItemDto> admittedEvidences,
             int callsUsed,
@@ -112,13 +90,7 @@ public class WsaSearchService {
     }
 
     /**
-     * 为单条论断执行完整检索流程（主检索 -> 充分性判定 -> 政务升级检索），并实时回调检索子阶段
-     *
-     * @param neutralQuery        中性检索词
-     * @param requestBudgetUsed   本次请求级已用检索次数计数器（上限 12 次）
-     * @param cancelled           任务取消标志
-     * @param stageStatusCallback 实时检索阶段更新回调
-     * @return 检索与证据准入汇总结果
+     * 为单条论断执行完整自适应检索流程（时效探测/主检索 -> 充分性判定 -> 精准 Site/政务升级检索）
      */
     public ClaimSearchOutcome searchForClaim(
             String neutralQuery,
@@ -131,14 +103,17 @@ public class WsaSearchService {
         AtomicBoolean retryUsed = new AtomicBoolean(false);
         List<WsaSearchPage> accumulatedPages = new ArrayList<>();
 
-        // 1. 阶段一：执行混合模式主检索
         if (cancelled != null && cancelled.get()) {
             return new ClaimSearchOutcome(Collections.emptyList(), 0, true, "任务已取消");
         }
         notifyStage(stageStatusCallback, ClaimVerifyStage.PRIMARY_SEARCHING);
 
+        // 1. 阶段一：时效敏感判断与自适应检索
+        boolean freshnessSensitive = isFreshnessSensitive(neutralQuery);
+        String freshnessParam = freshnessSensitive ? "m6" : null;
+
         SingleCallResult primaryResult = executeWithRetryIfEligible(
-                neutralQuery, null, claimCallsUsed, requestBudgetUsed, retryUsed, maxPerClaim
+                neutralQuery, null, null, freshnessParam, claimCallsUsed, requestBudgetUsed, retryUsed, maxPerClaim
         );
         if (!primaryResult.success()) {
             return new ClaimSearchOutcome(
@@ -157,36 +132,56 @@ public class WsaSearchService {
             return new ClaimSearchOutcome(admitted, claimCallsUsed.get(), false, null);
         }
 
-        // 3. 阶段三：主检索证据不充分，若预算允许则执行 1 次限定政府类行业（gov）的升级检索
+        // 若时效探测（m6）结果证据不足且仍有预算，自动透明回退（Fallback）至全时段检索获取长效权威指南
+        if (freshnessSensitive && canInvokeNextSearch(claimCallsUsed.get(), maxPerClaim, requestBudgetUsed.get())) {
+            log.info("Freshness probe returned insufficient evidence, fallback to all-time search: query={}", neutralQuery);
+            SingleCallResult fallbackResult = executeWithRetryIfEligible(
+                    neutralQuery, null, null, null, claimCallsUsed, requestBudgetUsed, retryUsed, maxPerClaim
+            );
+            if (fallbackResult.success() && !fallbackResult.pages().isEmpty()) {
+                accumulatedPages.addAll(fallbackResult.pages());
+                admitted = evidenceAdmissionService.admitAndRank(accumulatedPages);
+                if (evidenceAdmissionService.isEvidenceSufficient(admitted)) {
+                    return new ClaimSearchOutcome(admitted, claimCallsUsed.get(), false, null);
+                }
+            }
+        }
+
+        // 3. 阶段三：主检索证据不充分，执行精准 Site 定向与政务升级检索
         if (cancelled != null && cancelled.get()) {
             return new ClaimSearchOutcome(admitted, claimCallsUsed.get(), true, "任务已取消");
         }
         if (canInvokeNextSearch(claimCallsUsed.get(), maxPerClaim, requestBudgetUsed.get())) {
             notifyStage(stageStatusCallback, ClaimVerifyStage.UPGRADE_SEARCHING);
-            SingleCallResult govResult = executeWithRetryIfEligible(
-                    neutralQuery, INDUSTRY_GOV, claimCallsUsed, requestBudgetUsed, retryUsed, maxPerClaim
+            String targetSite = resolveTargetSite(neutralQuery);
+
+            // 先执行带精准官方 Site 定向的政务升级检索
+            SingleCallResult siteGovResult = executeWithRetryIfEligible(
+                    neutralQuery, INDUSTRY_GOV, targetSite, null, claimCallsUsed, requestBudgetUsed, retryUsed, maxPerClaim
             );
-            if (govResult.success() && !govResult.pages().isEmpty()) {
-                accumulatedPages.addAll(govResult.pages());
+            if (siteGovResult.success() && !siteGovResult.pages().isEmpty()) {
+                accumulatedPages.addAll(siteGovResult.pages());
                 notifyStage(stageStatusCallback, ClaimVerifyStage.EVIDENCE_ADMITTING);
                 admitted = evidenceAdmissionService.admitAndRank(accumulatedPages);
-            } else if (!govResult.success() && admitted.isEmpty()) {
-                // 若主检索无准入证据且升级检索发生超时/限流异常，则标记为待重试
-                return new ClaimSearchOutcome(
-                        Collections.emptyList(),
-                        claimCallsUsed.get(),
-                        true,
-                        govResult.errorMessage()
+            } else if (canInvokeNextSearch(claimCallsUsed.get(), maxPerClaim, requestBudgetUsed.get())) {
+                // 若垂直定向站点无结果，平滑回退至通用政务检索（Industry=gov）
+                SingleCallResult generalGovResult = executeWithRetryIfEligible(
+                        neutralQuery, INDUSTRY_GOV, null, null, claimCallsUsed, requestBudgetUsed, retryUsed, maxPerClaim
                 );
+                if (generalGovResult.success() && !generalGovResult.pages().isEmpty()) {
+                    accumulatedPages.addAll(generalGovResult.pages());
+                    notifyStage(stageStatusCallback, ClaimVerifyStage.EVIDENCE_ADMITTING);
+                    admitted = evidenceAdmissionService.admitAndRank(accumulatedPages);
+                }
             }
         }
 
-        // 4. 可选阶段四：若配置显式开启了学术类行业检索（默认关闭）且证据仍不充分且预算允许
+        // 4. 可选阶段四：学术类行业检索（默认关闭）
         if (properties.getSearch().isEnableAcademic()
                 && !evidenceAdmissionService.isEvidenceSufficient(admitted)
                 && canInvokeNextSearch(claimCallsUsed.get(), maxPerClaim, requestBudgetUsed.get())) {
             SingleCallResult acadResult = executeWithRetryIfEligible(
-                    neutralQuery, INDUSTRY_ACAD, claimCallsUsed, requestBudgetUsed, retryUsed, maxPerClaim
+                    neutralQuery, INDUSTRY_ACAD, null, null, claimCallsUsed, requestBudgetUsed, retryUsed, maxPerClaim
             );
             if (acadResult.success() && !acadResult.pages().isEmpty()) {
                 accumulatedPages.addAll(acadResult.pages());
@@ -198,8 +193,40 @@ public class WsaSearchService {
     }
 
     /**
-     * 检查每日全局检索额度是否已耗尽（供任务前置检查使用）
+     * 判断中性检索词是否具有明显的时效敏感性（如当季病毒、变种、最新指南）
      */
+    public boolean isFreshnessSensitive(String query) {
+        if (query == null || query.isBlank()) {
+            return false;
+        }
+        String q = query.toLowerCase();
+        return q.contains("最新") || q.contains("近期") || q.contains("当季") || q.contains("变种")
+                || q.contains("变异株") || q.contains("流行") || q.contains("新药") || q.contains("新型") || q.contains("上市") || q.contains("2024")
+                || q.contains("2025") || q.contains("2026") || q.contains("支原体") || q.contains("登革热")
+                || q.contains("甲流") || q.contains("乙流") || q.contains("诺如");
+    }
+
+    /**
+     * 根据中性检索词智能判定政务精准定向站点（国家级垂直监管与疾控域名）
+     */
+    public String resolveTargetSite(String query) {
+        if (query == null || query.isBlank()) {
+            return "nhc.gov.cn";
+        }
+        String q = query.toLowerCase();
+        if (q.contains("药") || q.contains("他汀") || q.contains("阿司匹林") || q.contains("胶囊")
+                || q.contains("片") || q.contains("剂量") || q.contains("停药") || q.contains("换药")
+                || q.contains("副作用") || q.contains("降压") || q.contains("胰岛素") || q.contains("保健品")) {
+            return "nmpa.gov.cn";
+        }
+        if (q.contains("疾控") || q.contains("疫苗") || q.contains("传染") || q.contains("流感")
+                || q.contains("病毒") || q.contains("感染") || q.contains("支原体") || q.contains("登革热")
+                || q.contains("肺炎") || q.contains("新冠")) {
+            return "chinacdc.cn";
+        }
+        return "nhc.gov.cn";
+    }
+
     public void checkDailyQuotaAvailable() {
         refreshQuotaDateIfNeeded();
         int dailyQuota = properties.getSearch().getDailyQuota();
@@ -209,34 +236,34 @@ public class WsaSearchService {
         }
     }
 
-    // ===================== 内部调用与重试封装 =====================
-
     private record SingleCallResult(boolean success, List<WsaSearchPage> pages, String errorMessage) {
     }
 
-    /**
-     * 执行单次检索调用；仅当超时或服务端 5xx 且尚未重试过、同时未超预算上限时重试最多 1 次
-     */
     private SingleCallResult executeWithRetryIfEligible(
             String query,
             String industry,
+            String site,
+            String freshness,
             AtomicInteger claimCallsUsed,
             AtomicInteger requestBudgetUsed,
             AtomicBoolean retryUsed,
             int maxPerClaim) {
 
-        SingleCallResult firstAttempt = doSingleSearchCall(query, industry, claimCallsUsed, requestBudgetUsed, maxPerClaim);
+        SingleCallResult firstAttempt = doSingleSearchCall(
+                query, industry, site, freshness, claimCallsUsed, requestBudgetUsed, maxPerClaim
+        );
         if (firstAttempt.success()) {
             return firstAttempt;
         }
 
-        // 仅超时或 5xx 服务端异常且未重试过、且预算允许时重试 1 次（需求 4.4）
         if (isRetryableError(firstAttempt.errorMessage())
                 && retryUsed.compareAndSet(false, true)
                 && canInvokeNextSearch(claimCallsUsed.get(), maxPerClaim, requestBudgetUsed.get())) {
-            log.warn("WSA search transient failure, retrying once: query={}, industry={}, reason={}",
-                    query, industry, firstAttempt.errorMessage());
-            return doSingleSearchCall(query, industry, claimCallsUsed, requestBudgetUsed, maxPerClaim);
+            log.warn("WSA search transient failure, retrying once: query={}, industry={}, site={}, reason={}",
+                    query, industry, site, firstAttempt.errorMessage());
+            return doSingleSearchCall(
+                    query, industry, site, freshness, claimCallsUsed, requestBudgetUsed, maxPerClaim
+            );
         }
 
         return firstAttempt;
@@ -245,11 +272,12 @@ public class WsaSearchService {
     private SingleCallResult doSingleSearchCall(
             String query,
             String industry,
+            String site,
+            String freshness,
             AtomicInteger claimCallsUsed,
             AtomicInteger requestBudgetUsed,
             int maxPerClaim) {
 
-        // 1. 校验当前用户双链额度（Token 与元宝搜索次数，日/周/月任一耗尽即停止服务）
         Long currentUserId = cn.smallyoung.familydocsentinel.security.TaskExecutionHolder.getUserId();
         if (currentUserId == null) {
             currentUserId = cn.smallyoung.familydocsentinel.security.UserContext.getUserId();
@@ -262,14 +290,12 @@ public class WsaSearchService {
             }
         }
 
-        // 2. 检查单论断预算上限（<=3）
         int currentClaimCalls = claimCallsUsed.incrementAndGet();
         if (currentClaimCalls > maxPerClaim) {
             claimCallsUsed.decrementAndGet();
             return new SingleCallResult(false, Collections.emptyList(), "超过单论断检索次数上限");
         }
 
-        // 3. 检查单次请求总预算上限（<=12）
         int maxPerRequest = properties.getSearch().getMaxPerRequest();
         int currentReqCalls = requestBudgetUsed.incrementAndGet();
         if (currentReqCalls > maxPerRequest) {
@@ -279,20 +305,25 @@ public class WsaSearchService {
             return new SingleCallResult(false, Collections.emptyList(), "超过单次请求总检索预算上限");
         }
 
-        // 4. 检查并扣减每日全局额度（达 80% 告警，达 100% 阻断）
         if (!tryAcquireDailyQuota()) {
             requestBudgetUsed.decrementAndGet();
             claimCallsUsed.decrementAndGet();
             return new SingleCallResult(false, Collections.emptyList(), "今日核验额度已用完，请明天再试");
         }
 
-        // 4. 组装腾讯云 WSA SearchPro 请求（时效参数 Freshness 默认不传）
         SearchProRequest req = new SearchProRequest();
         req.setQuery(query);
         req.setMode(MODE_HYBRID);
         req.setCnt(CNT_DEFAULT);
+        req.setDeeplinks(Boolean.TRUE); // 开启富媒体子链检索，用于 VR 实体提权
         if (industry != null && !industry.isBlank()) {
             req.setIndustry(industry);
+        }
+        if (site != null && !site.isBlank()) {
+            req.setSite(site.strip());
+        }
+        if (freshness != null && !freshness.isBlank()) {
+            req.setFreshness(freshness.strip());
         }
 
         long searchStartTime = System.currentTimeMillis();
@@ -309,6 +340,9 @@ public class WsaSearchService {
                 try {
                     WsaSearchPage page = JSONObject.parseObject(pageJson, WsaSearchPage.class);
                     if (page != null) {
+                        if (site != null && !site.isBlank()) {
+                            page.setMatchedSite(site.strip());
+                        }
                         pages.add(page);
                     }
                 } catch (Exception parseEx) {
@@ -319,16 +353,15 @@ public class WsaSearchService {
         } catch (TencentCloudSDKException e) {
             String errCode = e.getErrorCode() != null ? e.getErrorCode() : "";
             String errMsg = e.getMessage() != null ? e.getMessage() : "";
-            // 需求第 5 节：检索服务鉴权失败 -> “核查服务暂时受限，请稍后再试”，不暴露密钥，记录告警
             if (errCode.contains("AuthFailure") || errCode.contains("UnauthorizedOperation")) {
                 log.error("[WsaAuthAlert] 检索服务鉴权失败，请检查密钥配置! errorCode={}, requestId={}",
                         errCode, e.getRequestId());
                 return new SingleCallResult(false, Collections.emptyList(), "检索服务鉴权失败，请检查密钥配置");
             }
-            log.warn("WSA SearchPro SDK exception: industry={}, code={}, msg={}", industry, errCode, errMsg);
+            log.warn("WSA SearchPro SDK exception: industry={}, site={}, code={}, msg={}", industry, site, errCode, errMsg);
             return new SingleCallResult(false, Collections.emptyList(), "SDK_ERR:" + errCode + ":" + errMsg);
         } catch (Exception e) {
-            log.warn("WSA SearchPro unexpected error: industry={}, msg={}", industry, e.getMessage());
+            log.warn("WSA SearchPro unexpected error: industry={}, site={}, msg={}", industry, site, e.getMessage());
             return new SingleCallResult(false, Collections.emptyList(), "TIMEOUT_OR_NET:" + e.getMessage());
         } finally {
             long cost = System.currentTimeMillis() - searchStartTime;
@@ -343,41 +376,17 @@ public class WsaSearchService {
         }
     }
 
-    private boolean canInvokeNextSearch(int currentClaimCalls, int maxPerClaim, int currentRequestCalls) {
-        return currentClaimCalls < maxPerClaim
-                && currentRequestCalls < properties.getSearch().getMaxPerRequest();
-    }
-
-    private boolean isRetryableError(String errorMsg) {
-        if (errorMsg == null) {
-            return false;
-        }
-        String lower = errorMsg.toLowerCase();
-        return lower.contains("timeout")
-                || lower.contains("timed out")
-                || lower.contains("internalerror")
-                || lower.contains("serviceunavailable")
-                || lower.contains("500")
-                || lower.contains("502")
-                || lower.contains("503")
-                || lower.contains("504");
-    }
-
-    /**
-     * 尝试扣减每日全局额度，达 80% 输出运维告警，超限返回 false
-     */
     private boolean tryAcquireDailyQuota() {
         refreshQuotaDateIfNeeded();
         int limit = properties.getSearch().getDailyQuota();
         int used = dailyUsedCount.incrementAndGet();
         if (used > limit) {
             dailyUsedCount.decrementAndGet();
-            log.error("[QuotaAlert] 今日核验检索额度已耗尽: used={}, limit={}", used - 1, limit);
+            log.error("[QuotaAlert] 今日全局检索额度已耗尽: used={}, limit={}", used - 1, limit);
             return false;
         }
-        int warnThreshold = (int) Math.ceil(limit * properties.getSearch().getQuotaWarnRatio());
-        if (used >= warnThreshold && dailyWarnLogged.compareAndSet(false, true)) {
-            log.warn("[QuotaAlert] 今日核验检索额度已达到 80% 告警线: used={}, limit={}", used, limit);
+        if (used >= (int) (limit * 0.8) && dailyWarnLogged.compareAndSet(false, true)) {
+            log.warn("[QuotaAlert] 今日检索调用已达 80% 警戒线: used={}, limit={}", used, limit);
         }
         return true;
     }
@@ -390,15 +399,33 @@ public class WsaSearchService {
                     quotaDate = today;
                     dailyUsedCount.set(0);
                     dailyWarnLogged.set(false);
+                    log.info("WSA search daily quota counter refreshed for date={}", today);
                 }
             }
         }
     }
 
-    private static void notifyStage(Consumer<ClaimVerifyStage> callback, ClaimVerifyStage stage) {
+    private boolean canInvokeNextSearch(int claimCalls, int maxPerClaim, int requestBudgetUsed) {
+        return (claimCalls < maxPerClaim) && (requestBudgetUsed < properties.getSearch().getMaxPerRequest());
+    }
+
+    private boolean isRetryableError(String errorMessage) {
+        if (errorMessage == null || errorMessage.isBlank()) {
+            return false;
+        }
+        String lower = errorMessage.toLowerCase();
+        return lower.contains("timeout") || lower.contains("500") || lower.contains("502")
+                || lower.contains("503") || lower.contains("504") || lower.contains("network")
+                || lower.contains("connect");
+    }
+
+    private void notifyStage(Consumer<ClaimVerifyStage> callback, ClaimVerifyStage stage) {
         if (callback != null && stage != null) {
-            callback.accept(stage);
+            try {
+                callback.accept(stage);
+            } catch (Exception ex) {
+                log.debug("Stage status callback exception ignored", ex);
+            }
         }
     }
 }
-

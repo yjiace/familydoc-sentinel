@@ -533,4 +533,45 @@ class FactCheckCoreRulesTest {
         assertDoesNotThrow(() -> usageService.checkUserQuotaAvailable(100L));
         assertEquals(0L, stat.getDailySearchCount());
     }
+
+    @Test
+    @DisplayName("4.11 元宝搜索高阶特性：自适应 Freshness 时效回退、Site 垂类精准定向与 VR 结构化实体 1.2x 提权")
+    void testWsaAdvancedFeaturesSiteFreshnessAndVr() {
+        // 1. 验证时效敏感词与精准定向站点判定
+        WsaSearchService wsaSearchService = new WsaSearchService(null, properties, evidenceAdmissionService);
+        assertTrue(wsaSearchService.isFreshnessSensitive("2026年最新支原体肺炎变异株预防指南"));
+        assertTrue(wsaSearchService.isFreshnessSensitive("新型降压药上市副作用辟谣"));
+        assertFalse(wsaSearchService.isFreshnessSensitive("每天喝醋能软化血管吗"));
+
+        assertEquals("nmpa.gov.cn", wsaSearchService.resolveTargetSite("长期服用他汀降压药伤肝肾"));
+        assertEquals("chinacdc.cn", wsaSearchService.resolveTargetSite("接种流感疫苗与支原体感染预防"));
+        assertEquals("nhc.gov.cn", wsaSearchService.resolveTargetSite("高血压患者日常清淡饮食"));
+
+        // 2. 验证 VR 结构化实体识别与 1.2x 提权
+        WsaSearchPage normalPage = new WsaSearchPage();
+        normalPage.setUrl("https://www.nhc.gov.cn/wjw/article1.html");
+        normalPage.setSite("国家卫健委");
+        normalPage.setTitle("高血压防治指南");
+        normalPage.setPassage("常规健康常识文本。");
+        normalPage.setScore(0.80);
+
+        WsaSearchPage vrPage = new WsaSearchPage();
+        vrPage.setUrl("https://www.nhc.gov.cn/wjw/baike_hypertension.html");
+        vrPage.setSite("国家卫健委");
+        vrPage.setTitle("高血压百科词条权威卡片");
+        vrPage.setPassage("高血压权威结构化词条定义与诊疗规范。");
+        vrPage.setScore(0.80); // 原始得分相同
+        vrPage.setDeeplinks(List.of(new WsaSearchPage.Deeplink())); // 包含富媒体子链
+
+        assertTrue(evidenceAdmissionService.isVrEntity(vrPage, vrPage.getSite(), vrPage.getTitle()));
+        assertFalse(evidenceAdmissionService.isVrEntity(normalPage, normalPage.getSite(), normalPage.getTitle()));
+
+        List<EvidenceItemDto> admitted = evidenceAdmissionService.admitAndRank(List.of(normalPage, vrPage));
+        assertEquals(2, admitted.size());
+
+        EvidenceItemDto topOne = admitted.getFirst();
+        assertTrue(topOne.isVr(), "VR 实体享有 1.2x 提权因子，应排在首位");
+        // 验证提权分：0.80 * 1.5 * 1.2 = 1.44
+        assertEquals(1.44, topOne.getRankScore(), 0.001);
+    }
 }

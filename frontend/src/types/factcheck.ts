@@ -111,6 +111,10 @@ export interface EvidenceItemDto {
   quote: string
   /** 是否通过四项硬校验 */
   citationValid: boolean
+  /** 是否为腾讯元宝搜索 VR 结构化实体词条 */
+  isVr?: boolean
+  /** 命中的精准定向权威站点域名 */
+  matchedSite?: string
   /** 附加标注（如“未据此下结论”或“口径不同”） */
   note?: string
 }
