@@ -46,6 +46,9 @@ public class FactCheckController {
     @Resource
     private RedFlagService redFlagService;
 
+    @Resource
+    private cn.smallyoung.familydocsentinel.service.OcrService ocrService;
+
     /**
      * 创建并启动核验任务（同时兼容 JSON 请求体 {@link FactCheckRequest} 与纯文本请求体）
      *
@@ -123,6 +126,23 @@ public class FactCheckController {
     public RedFlagResult scanRedFlag(@RequestBody(required = false) String rawBody) {
         FactCheckRequest req = parseFactCheckRequest(rawBody);
         return redFlagService.scan(req.getText(), req.isIgnoreHardRedFlag());
+    }
+
+    /**
+     * 图片多模态文字提取接口（用于微信群养生截图/长辈谣言海报识别）
+     *
+     * @param file    上传的图片文件
+     * @param request HTTP 请求对象（执行滑动窗口限流）
+     * @return 识别提取后的文本结果
+     */
+    @PostMapping("ocr")
+    public java.util.Map<String, String> ocrExtract(@RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            HttpServletRequest request) {
+        if (!rateLimiterService.tryAcquire(request)) {
+            throw BizException.of(RATE_LIMIT_MSG);
+        }
+        String extractedText = ocrService.extractTextFromImage(file);
+        return java.util.Map.of("text", extractedText);
     }
 
     /**

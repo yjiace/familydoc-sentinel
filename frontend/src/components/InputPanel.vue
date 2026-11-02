@@ -26,15 +26,68 @@
         </div>
       </div>
 
+      <!-- 微信截图/海报多模态识图工具栏 -->
+      <div class="ocr-action-bar">
+        <button
+          type="button"
+          class="btn-ocr-upload"
+          :disabled="loading || isOcrLoading"
+          @click="triggerFileInput"
+          title="上传微信群长辈转发的养生截图或大字海报，自动识别提取文字"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <span>{{ isOcrLoading ? '正在识图中...' : '微信截图/海报识图' }}</span>
+        </button>
+        <span class="ocr-action-hint">支持 Ctrl+V 粘贴截图 / 拖拽图片</span>
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/*"
+          class="hidden-file-input"
+          @change="onFileChange"
+        />
+      </div>
+
+      <!-- OCR 状态反馈条 -->
+      <div v-if="isOcrLoading" class="ocr-status-box loading-box">
+        <svg class="spin-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="2" x2="12" y2="6"/>
+          <line x1="12" y1="18" x2="12" y2="22"/>
+          <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
+          <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
+          <line x1="2" y1="12" x2="6" y2="12"/>
+          <line x1="18" y1="12" x2="22" y2="12"/>
+          <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/>
+          <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+        </svg>
+        <span>腾讯云 OCR 正在识别图片中的文字...</span>
+      </div>
+      <div v-else-if="ocrMessage" class="ocr-status-box" :class="ocrSuccess ? 'success-box' : 'error-box'">
+        <span>{{ ocrMessage }}</span>
+      </div>
+
       <!-- 文本输入框 -->
-      <div class="textarea-box" :class="{ 'has-error': isOverLimit || !!validationError }">
+      <div
+        class="textarea-box"
+        :class="{
+          'has-error': isOverLimit || !!validationError,
+          'is-dragover': isDraggingOver
+        }"
+        @dragover.prevent="isDraggingOver = true"
+        @dragleave.prevent="isDraggingOver = false"
+        @drop.prevent="onDropFile"
+      >
         <textarea
           :value="modelValue"
           @input="onInput"
+          @paste="onPaste"
           class="rumor-textarea"
           rows="4"
-          placeholder="请在此粘贴健康文章、养生流言或用药说法（最多 2000 字）..."
-          :disabled="loading"
+          placeholder="请在此粘贴健康文章、养生流言或用药说法（最多 2000 字）；支持 Ctrl+V 粘贴截图..."
+          :disabled="loading || isOcrLoading"
           aria-label="输入待核验的健康文章或说法"
         ></textarea>
       </div>
@@ -270,6 +323,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { isLoggedIn, userUsage } from '../utils/userState'
+import { uploadOcrImage } from '../api/factcheckApi'
 
 const props = defineProps<{
   modelValue: string
@@ -283,6 +337,95 @@ const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'clear'): void
 }>()
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const isOcrLoading = ref(false)
+const ocrMessage = ref('')
+const ocrSuccess = ref(false)
+const isDraggingOver = ref(false)
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+async function handleImageFile(file: File) {
+  if (!file.type.startsWith('image/')) {
+    ocrSuccess.value = false
+    ocrMessage.value = '请选择图片文件（JPG、PNG、WEBP 等）'
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ocrSuccess.value = false
+    ocrMessage.value = '图片体积过大（超过 5MB），请压缩后重试'
+    return
+  }
+
+  isOcrLoading.value = true
+  ocrMessage.value = ''
+  try {
+    const res = await uploadOcrImage(file)
+    const text = (res?.text || '').trim()
+    if (!text) {
+      ocrSuccess.value = false
+      ocrMessage.value = '未能从图片中识别出文字'
+      return
+    }
+
+    const current = (props.modelValue || '').trim()
+    const newText = current ? `${current}\n${text}` : text
+    emit('update:modelValue', newText)
+
+    ocrSuccess.value = true
+    ocrMessage.value = `识图成功，已提取 ${text.length} 字并自动填入！`
+    setTimeout(() => {
+      if (ocrMessage.value.startsWith('识图成功')) {
+        ocrMessage.value = ''
+      }
+    }, 4000)
+  } catch (err: any) {
+    ocrSuccess.value = false
+    ocrMessage.value = err?.message || '图片文字识别失败，请直接粘贴文本'
+  } finally {
+    isOcrLoading.value = false
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
+  }
+}
+
+function onFileChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    handleImageFile(target.files[0])
+  }
+}
+
+function onPaste(event: ClipboardEvent) {
+  if (props.loading || isOcrLoading.value) return
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) {
+        event.preventDefault()
+        handleImageFile(file)
+        return
+      }
+    }
+  }
+}
+
+function onDropFile(event: DragEvent) {
+  isDraggingOver.value = false
+  if (props.loading || isOcrLoading.value) return
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    handleImageFile(files[0])
+  }
+}
 
 const sampleGroups = [
   [
@@ -402,12 +545,98 @@ function barStateClass(used?: number, limit?: number): string {
   font-weight: 700;
 }
 
+.ocr-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.btn-ocr-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-ocr-upload:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.btn-ocr-upload:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ocr-action-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.ocr-status-box {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ocr-status-box.loading-box {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.ocr-status-box.success-box {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.ocr-status-box.error-box {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .textarea-box {
   background: #f8fafc;
   border: 1.5px solid #e2e8f0;
   border-radius: 14px;
   padding: 10px 14px;
   transition: all 0.2s ease;
+}
+
+.textarea-box.is-dragover {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 .textarea-box:focus-within {

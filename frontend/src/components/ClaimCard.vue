@@ -124,6 +124,23 @@
         :opposingEvidences="claim.opposingEvidences"
         :unverifiedCauseCode="claim.unverifiedCauseCode"
       />
+
+      <!-- 卡片底部操作栏：生成全量辟谣长图海报 -->
+      <div class="card-action-bar">
+        <button
+          type="button"
+          class="btn-poster-action"
+          @click="$emit('openPoster')"
+          title="生成包含本次核验所有内容的辟谣长图"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+            <circle cx="9" cy="9" r="2"/>
+            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+          </svg>
+          <span>生成辟谣海报（发长辈/群聊）</span>
+        </button>
+      </div>
     </template>
   </article>
 </template>
@@ -139,8 +156,9 @@ const props = defineProps<{
   retrying?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'retry', claimId: string): void
+  (e: 'openPoster'): void
 }>()
 
 const displayCategoryLabel = computed(() => {
@@ -444,5 +462,33 @@ const primaryBannerText = computed(() => {
 
 .btn-retry-single:hover:not(:disabled) {
   background: #fef3c7;
+}
+
+.card-action-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.btn-poster-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-poster-action:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 </style>

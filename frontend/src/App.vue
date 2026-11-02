@@ -22,8 +22,10 @@
           :summaryText="summaryBannerText"
           :isCacheHit="isShowingCachedResult"
           :loading="isPolling"
+          :canGeneratePoster="displayedClaims.length > 0"
           @reverify="handleTriggerVerify(ignoreHardRedFlagState, true)"
           @openHistory="openHistoryDrawer"
+          @openPoster="isSharePosterOpen = true"
         />
 
         <!-- 内部可滚动内容容器 -->
@@ -62,6 +64,7 @@
               :claim="claim"
               :retrying="retryingClaimId === claim.claimId"
               @retry="handleRetrySingleClaim"
+              @openPoster="isSharePosterOpen = true"
             />
           </div>
 
@@ -121,6 +124,13 @@
 
     <!-- 用户登录/注册一体化弹窗 -->
     <AuthModal />
+
+    <!-- 全量辟谣关怀长图海报弹窗（汇聚本次核验的所有说法与综述） -->
+    <SharePosterModal
+      v-model:visible="isSharePosterOpen"
+      :summaryText="summaryBannerText"
+      :claims="displayedClaims"
+    />
   </div>
 </template>
 
@@ -136,6 +146,7 @@ import UnverifiedCollapse from './components/UnverifiedCollapse.vue'
 import ConsentModal from './components/ConsentModal.vue'
 import LocalHistoryDrawer from './components/LocalHistoryDrawer.vue'
 import AuthModal from './components/AuthModal.vue'
+import SharePosterModal from './components/SharePosterModal.vue'
 import { refreshUserData, isLoggedIn, openAuthModal } from './utils/userState'
 
 import {
@@ -162,6 +173,7 @@ const isPolling = ref(false)
 const retryingClaimId = ref<string | null>(null)
 const ignoreHardRedFlagState = ref(false)
 const isLocalCacheHit = ref(false)
+const isSharePosterOpen = ref(false)
 
 const currentTask = ref<FactCheckTaskResponse | null>(null)
 const clientRedFlag = ref<RedFlagResult | null>(null)

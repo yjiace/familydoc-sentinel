@@ -155,3 +155,59 @@ export async function scanRedFlagByServer(
   })
 }
 
+/**
+ * 上传图片提取文字（腾讯云 OCR 多模态提取）
+ * POST /api/v1/factcheck/ocr
+ *
+ * @param file 图片文件
+ */
+export async function uploadOcrImage(file: File): Promise<{ text: string }> {
+  ensureOnline()
+
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('familydoc_auth_token') : null
+  const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  let response: Response
+  try {
+    response = await fetch(`${BASE_URL}/ocr`, {
+      method: 'POST',
+      headers: {
+        ...authHeader
+      },
+      body: formData
+    })
+  } catch (err) {
+    ensureOnline()
+    throw new Error('网络连接异常，图片上传失败')
+  }
+
+  if (response.status === 401) {
+    setAuthToken(null)
+    openAuthModal('login')
+    throw new Error('登录已失效或尚未登录，请先登录')
+  }
+
+  let body: SysResult<{ text: string }>
+  try {
+    body = (await response.json()) as SysResult<{ text: string }>
+  } catch (err) {
+    throw new Error('服务响应格式异常，请稍后再试')
+  }
+
+  if (body?.code === 401) {
+    setAuthToken(null)
+    openAuthModal('login')
+    throw new Error(body?.message || '请先登录')
+  }
+
+  if (!body || body.code !== 200) {
+    throw new Error(body?.message || '图片文字识别失败，请稍后再试')
+  }
+
+  return body.data
+}
+
+
