@@ -56,7 +56,7 @@
               v-for="(item, index) in claims"
               :key="item.claimId || index"
               class="single-claim-poster-card"
-              :class="`theme-${(item.verdictCode || 'pending').toLowerCase()}`"
+              :class="getThemeClass(item.verdictCode)"
             >
               <!-- 说法序号与分类标签 -->
               <div class="claim-card-head">
@@ -79,12 +79,19 @@
                   </p>
                 </div>
 
-                <!-- 适老化双层仿真印章 -->
+                <!-- 适老化双层仿真印章（与列表结果完全对齐） -->
                 <div class="poster-stamp-container">
-                  <div class="poster-stamp" :class="`stamp-${(item.verdictCode || 'unverified').toLowerCase()}`">
+                  <div
+                    class="poster-stamp"
+                    :class="getStampClass(item.verdictCode)"
+                    :style="getStampStyle(item)"
+                  >
                     <div class="stamp-inner-border">
-                      <div class="stamp-sub-text">{{ getStampSubText(item.verdictCode) }}</div>
-                      <div class="stamp-main-text">{{ getStampMainText(item.verdictCode) }}</div>
+                      <div class="stamp-sub-text">{{ getStampSubText(item) }}</div>
+                      <svg class="stamp-star-svg" viewBox="0 0 24 24" width="8" height="8" fill="currentColor" aria-hidden="true">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                      <div class="stamp-main-text">{{ getStampMainText(item) }}</div>
                     </div>
                   </div>
                 </div>
@@ -231,26 +238,80 @@ function getCategoryLabel(categoryCode?: string): string {
   }
 }
 
-function getStampMainText(verdictCode?: string): string {
-  switch (verdictCode) {
+function getStampMainText(item?: ClaimItemDto | string): string {
+  if (typeof item === 'object' && item?.stamp?.colloquialText) {
+    return item.stamp.colloquialText
+  }
+  const code = typeof item === 'object' ? item.verdictCode : item
+  switch (code) {
     case 'SUPPORTED': return '有依据'
+    case 'MISLEADING':
     case 'REFUTED': return '有误导'
     case 'CONDITIONAL': return '看情况'
     case 'UNVERIFIED': return '没查实'
+    case 'ASK_DOCTOR':
     case 'CONSULT_DOCTOR': return '问医生'
-    default: return '已核验'
+    case 'RETRY_NEEDED': return '未查成'
+    default: return '待核验'
   }
 }
 
-function getStampSubText(verdictCode?: string): string {
-  switch (verdictCode) {
-    case 'SUPPORTED': return '说法可信'
-    case 'REFUTED': return '与依据矛盾'
-    case 'CONDITIONAL': return '因人而异'
-    case 'UNVERIFIED': return '证据不足'
-    case 'CONSULT_DOCTOR': return '需遵医嘱'
-    default: return '医学核验'
+function getStampSubText(item?: ClaimItemDto | string): string {
+  if (typeof item === 'object' && item?.stamp?.rigorousText) {
+    return item.stamp.rigorousText
   }
+  const code = typeof item === 'object' ? item.verdictCode : item
+  switch (code) {
+    case 'SUPPORTED': return '证据相符'
+    case 'MISLEADING':
+    case 'REFUTED': return '与依据矛盾'
+    case 'CONDITIONAL': return '条件受限'
+    case 'UNVERIFIED': return '无法核实'
+    case 'ASK_DOCTOR':
+    case 'CONSULT_DOCTOR': return '请咨询医生'
+    case 'RETRY_NEEDED': return '待重试'
+    default: return '核验中'
+  }
+}
+
+function getStampColor(item: ClaimItemDto): string {
+  if (item.stamp?.colorHex) {
+    return item.stamp.colorHex
+  }
+  switch (item.verdictCode) {
+    case 'SUPPORTED': return '#047857'
+    case 'MISLEADING':
+    case 'REFUTED': return '#e11d48'
+    case 'CONDITIONAL': return '#b45309'
+    case 'UNVERIFIED': return '#f43f5e'
+    case 'ASK_DOCTOR':
+    case 'CONSULT_DOCTOR': return '#1d4ed8'
+    case 'RETRY_NEEDED': return '#64748b'
+    default: return '#2563eb'
+  }
+}
+
+function getStampStyle(item: ClaimItemDto) {
+  const color = getStampColor(item)
+  return {
+    '--stamp-color': color,
+    borderColor: color,
+    color: color
+  }
+}
+
+function getStampClass(verdictCode?: string): string {
+  const code = (verdictCode || '').toLowerCase()
+  if (code === 'refuted') return 'stamp-misleading'
+  if (code === 'consult_doctor') return 'stamp-ask_doctor'
+  return `stamp-${code || 'unverified'}`
+}
+
+function getThemeClass(verdictCode?: string): string {
+  const code = (verdictCode || '').toLowerCase()
+  if (code === 'refuted') return 'theme-misleading'
+  if (code === 'consult_doctor') return 'theme-ask_doctor'
+  return `theme-${code || 'pending'}`
 }
 
 function close() {
@@ -571,20 +632,25 @@ async function copyPosterToClipboard() {
   gap: 7px;
 }
 
-.single-claim-poster-card.theme-refuted {
-  border-left: 4px solid #dc2626;
+.single-claim-poster-card.theme-refuted,
+.single-claim-poster-card.theme-misleading {
+  border-left: 4px solid #e11d48;
 }
 .single-claim-poster-card.theme-supported {
   border-left: 4px solid #16a34a;
 }
 .single-claim-poster-card.theme-conditional {
-  border-left: 4px solid #d97706;
+  border-left: 4px solid #b45309;
 }
 .single-claim-poster-card.theme-unverified {
-  border-left: 4px solid #2563eb;
+  border-left: 4px solid #f43f5e;
 }
-.single-claim-poster-card.theme-consult_doctor {
-  border-left: 4px solid #7c3aed;
+.single-claim-poster-card.theme-consult_doctor,
+.single-claim-poster-card.theme-ask_doctor {
+  border-left: 4px solid #1d4ed8;
+}
+.single-claim-poster-card.theme-retry_needed {
+  border-left: 4px solid #d97706;
 }
 
 .claim-card-head {
@@ -678,46 +744,59 @@ async function copyPosterToClipboard() {
   align-items: center;
   justify-content: center;
   transform: rotate(-10deg);
-  border: 2.5px solid;
+  border: 2.5px solid var(--stamp-color, #2563eb);
   padding: 2.5px;
   box-sizing: border-box;
   background: #ffffff;
+  color: var(--stamp-color, #2563eb);
 }
 
 .stamp-inner-border {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 1.2px dashed;
+  border: 1.2px dashed var(--stamp-color, currentColor);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  gap: 1px;
 }
 
 .stamp-sub-text {
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.stamp-star-svg {
+  margin: 1px 0;
+  opacity: 0.85;
 }
 
 .stamp-main-text {
   font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.8px;
-  margin-top: 1px;
+  line-height: 1.1;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 }
 
-.stamp-refuted {
-  border-color: #dc2626;
-  color: #dc2626;
+.stamp-refuted,
+.stamp-misleading {
+  --stamp-color: #e11d48;
+  border-color: #e11d48;
+  color: #e11d48;
 }
-.stamp-refuted .stamp-inner-border {
-  border-color: #dc2626;
+.stamp-refuted .stamp-inner-border,
+.stamp-misleading .stamp-inner-border {
+  border-color: #e11d48;
 }
 
 .stamp-supported {
+  --stamp-color: #16a34a;
   border-color: #16a34a;
   color: #16a34a;
 }
@@ -726,27 +805,41 @@ async function copyPosterToClipboard() {
 }
 
 .stamp-conditional {
-  border-color: #d97706;
-  color: #d97706;
+  --stamp-color: #b45309;
+  border-color: #b45309;
+  color: #b45309;
 }
 .stamp-conditional .stamp-inner-border {
-  border-color: #d97706;
+  border-color: #b45309;
 }
 
 .stamp-unverified {
-  border-color: #2563eb;
-  color: #2563eb;
+  --stamp-color: #f43f5e;
+  border-color: #f43f5e;
+  color: #f43f5e;
 }
 .stamp-unverified .stamp-inner-border {
-  border-color: #2563eb;
+  border-color: #f43f5e;
 }
 
-.stamp-consult_doctor {
-  border-color: #7c3aed;
-  color: #7c3aed;
+.stamp-consult_doctor,
+.stamp-ask_doctor {
+  --stamp-color: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #1d4ed8;
 }
-.stamp-consult_doctor .stamp-inner-border {
-  border-color: #7c3aed;
+.stamp-consult_doctor .stamp-inner-border,
+.stamp-ask_doctor .stamp-inner-border {
+  border-color: #1d4ed8;
+}
+
+.stamp-retry_needed {
+  --stamp-color: #d97706;
+  border-color: #d97706;
+  color: #d97706;
+}
+.stamp-retry_needed .stamp-inner-border {
+  border-color: #d97706;
 }
 
 /* 证据出处与原话 */
