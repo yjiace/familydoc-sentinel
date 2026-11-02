@@ -1,16 +1,16 @@
 # 【元宝搜索开发者征文】专治“相亲相爱一家人”群养生谣言！我用腾讯元宝搜索 + Spring AI 做了个不讲胡话的健康谣言核验系统
 
-> **一句话介绍**：「家医智核·流言粉碎」（FamilyDoc Sentinel）是一个面向中老年人及其子女的健康谣言核验系统。系统基于**双层责任链架构**，在运行时调用**腾讯云元宝搜索（WSA `SearchPro`）**检索卫健委、疾控、药监、三甲医院等权威来源；通过**多级提示词过滤与代码级四项硬校验**，把大模型严格限制在“拆说法、读证据、摘原话”的边界内，最终结论全部由**确定性规则引擎**给出。同时，系统内置基于 Spring AI `CallAdvisor` 与搜索网关的**双链三周期（日/周/月）Token 与元宝搜索额度熔断机制**，实现从检索、防幻觉裁决到成本管控的完整闭环。
+> **一句话介绍**：「家医智核·流言粉碎」（FamilyDoc Sentinel）是一个面向中老年人及其子女的健康谣言核验系统。系统深度整合**腾讯云通用印刷体识别（OCR）与腾讯云元宝搜索（WSA `SearchPro`）**，支持家族群**大字长辈图/微信截图一键上传、拖拽与 `Ctrl+V` 剪贴板直贴**识图提取；基于**双层责任链架构**在运行时检索卫健委、疾控、药监、三甲医院等权威来源，通过**多级提示词过滤与代码级四项硬校验**把大模型严格限制在“拆说法、读证据、摘原话”的安全边界内，结论由**确定性规则引擎**裁决并可**一键生成适老化辟谣长图**直接回传微信群。同时，系统内置基于 Spring AI `CallAdvisor` 与搜索网关的**双链三周期（日/周/月）Token 与元宝搜索额度熔断机制**，实现从视觉识图输入、权威循证、防幻觉裁决到社交传播与成本管控的完整闭环。
 
 | 项目信息 | 内容 |
 | :-- | :-- |
-| **作品状态** | **已上线**（支持多用户在线注册体验、双链配额实时管控与云端核验历史） |
-| **在线体验地址** | [doc.smallyoung.cn](https://doc.smallyoung.cn/) |
+| **作品状态** | **已上线**（支持多用户在线注册体验、多模态识图输入、双链配额实时管控、辟谣长图生成与云端核验历史） |
 | **开源仓库** | [https://github.com/yjiace/familydoc-sentinel](https://github.com/yjiace/familydoc-sentinel) |
+| **多模态能力** | 腾讯云通用印刷体识别 OCR（`tencentcloud-sdk-java-ocr` 3.2.42，共享腾讯云 API 密钥体系，支持剪贴板 `Ctrl+V` 截图粘贴、文件拖拽、图片上传与自然段落智能重组） |
 | **搜索能力** | 腾讯云元宝搜索 WSA `SearchPro`（`tencentcloud-sdk-java-wsa` 3.2.42，混合模式 `Mode=2` + 政务行业 `Industry=gov` 渐进式升级检索） |
 | **AI 与后端** | JDK 21、Spring Boot 4.1.2、Spring AI 2.0.2（DeepSeek-Chat，`temperature=0.0`）、双层责任链模式、PostgreSQL、Redis、Caffeine |
-| **前端与交互** | Vue 3 + Vite + TypeScript，适老化大字号、五色双层印章卡片、双链三周期额度实时看板 |
-| **关键词** | 元宝搜索、腾讯云 WSA、SearchPro、Spring AI、RAG 防幻觉、双层责任链、提示词过滤、CallAdvisor、双链额度熔断 |
+| **前端与交互** | Vue 3 + Vite + TypeScript，适老化大字号、五色双层印章卡片、全量适老化辟谣长图一键生成与剪贴板复制、双链三周期额度实时看板 |
+| **关键词** | 元宝搜索、腾讯云 WSA、腾讯云 OCR、SearchPro、Spring AI、多模态输入、长图分享、RAG 防幻觉、双层责任链、提示词过滤、CallAdvisor、双链额度熔断 |
 
 ![家医智核健康流言核验仪表盘完整结果](https://cdn.smallyoung.cn/1/3.png)
 
@@ -23,8 +23,9 @@
 “*多吃大蒜能彻底预防脑梗*”“*降压药伤肝肾，喝醋才是天然降压药*”“*突发心梗别打 120，用力拍打手肘内侧就能急救*”——面对家庭微信群里高频转发的千字养生文，现有查证方式存在三个痛点：
 
 1. **普通搜索噪音大，长文多论点难拆解**：常规网页搜索混杂大量自媒体、保健品软文与广告，中老年长辈难以分辨；一篇群转发长文往往夹杂三四条真假参半的说法，手动逐条查证门槛极高。
-2. **通用大模型容易“一本正经编造医学结论”**：大模型参数记忆存在滞后，面对缺乏证据的偏方倾向于强行下定论或伪造链接；更危险的是，它可能对具体患者越界给出“该吃几片、能否停药”的个体化用药指导。
-3. **面向 ToC 用户的零配置体验与平台密钥成本管控矛盾**：许多开源 AI 工具要求用户自行注册云厂商账号、申请并填写 API Key（BYOK 模式），这对中老年长辈和普通家庭用户而言门槛过高。本项目面向 ToC 用户采用**平台统一托管元宝搜索密钥与大模型密钥**的模式，屏蔽一切繁琐配置，让用户只关心“粘贴文本输入、查看核验输出”；但由平台统一承担调用成本后，若缺乏细粒度的资源计量与配额熔断机制，单一高频用户或异常脚本即可迅速耗尽平台预算。
+2. **中老年养生信息高度“视觉化”，纯文本输入存在天然鸿沟**：在家庭微信群中，流传最多的并非规范排版的纯文本，而是花哨的**“大字长辈图”、朋友圈长图、文章截图甚至短视频定格海报**。中老年人习惯直接转发图片，晚辈要想核实，过去必须手动逐字敲入或使用第三方识别工具二次中转，繁琐的操作步骤直接劝退了大部分查证意愿；
+3. **通用大模型容易“一本正经编造医学结论”**：大模型参数记忆存在滞后，面对缺乏证据的偏方倾向于强行下定论或伪造链接；更危险的是，它可能对具体患者越界给出“该吃几片、能否停药”的个体化用药指导。
+4. **面向 ToC 用户的零配置体验与平台密钥成本管控矛盾**：许多开源 AI 工具要求用户自行注册云厂商账号、申请并填写 API Key（BYOK 模式），这对中老年长辈和普通家庭用户而言门槛过高。本项目面向 ToC 用户采用**平台统一托管元宝搜索密钥、OCR 密钥与大模型密钥**的模式，屏蔽一切繁琐配置，让用户只关心“图片/文本一键输入、查看核验输出与一键分享辟谣”；但由平台统一承担调用成本后，若缺乏细粒度的资源计量、限流与配额熔断机制，单一高频用户或异常脚本即可迅速耗尽平台预算。
 
 ---
 
@@ -36,6 +37,8 @@
   1. `Mode=2` 混合模式同时覆盖自然检索结果与权威 VR 结构化结果，中文医疗健康网页召回率高；
   2. `Industry="gov"` 行业过滤支持定向检索政务与官方机构站点，当首次混合检索的一级权威证据不足时，追加一次政务检索即可精准补齐；
   3. 返回字段自带标题、URL、站点名称、摘要、发布日期与相关度打分（`Score`），天然契合“三级白名单加权排序、逐字引文比对、链接保真校验”的防幻觉流水线。
+* **与腾讯云通用 OCR 的双擎协同体系**：
+  在实际落地中，腾讯云通用印刷体识别（OCR）与元宝搜索（WSA）形成了极佳的互补搭档——**OCR 专注于“感知层”的高精度视觉转文字**，攻克大字长辈图与微信截图中低分辨率、复杂艺术字体及生僻医学名词的识别瓶颈；**元宝搜索则专注于“认知层”的权威事实循证**，提供可信赖的官方证据底座。两者共享统一的腾讯云云 API 鉴权基础设施，构筑起从图像输入到深度循证的坚实壁垒。
 
 ---
 
@@ -47,7 +50,11 @@
 
 ```mermaid
 graph TD
-    A[用户提交核验文本 2000字以内] --> Q1[前置配额网关: 校验用户日/周/月 Token 与元宝搜索双链额度]
+    IMG[多模态输入: 图片上传 / 文件拖拽 / 剪贴板 Ctrl+V 截图] --> OCR_GW[OCR安全网关: IP滑动窗口限流 + 格式/7MB校验]
+    OCR_GW --> OCR_SVC[腾讯云通用印刷体识别: 智能多行拼接为自然段落]
+    OCR_SVC --> A[前端输入框自动回填与核验触发 2000字以内]
+    TXT[纯文本直接输入 / 粘贴] --> A
+    A --> Q1[前置配额网关: 校验用户日/周/月 Token 与元宝搜索双链额度]
     Q1 -- 任一额度触顶 --> STOP[立即熔断 停止服务并返回周期超限原因]
     Q1 -- 额度充足 --> P10[Order 10: InputSanitizeHandler 清洗归一化与长度校验]
     P10 --> P20[Order 20: RedFlagScanHandler 分句级危急红线双层扫描]
@@ -69,6 +76,7 @@ graph TD
     V4 --> R06[第二层裁决责任链 ClaimAdjudicationRule Order 0~6]
     G --> R06
     R06 --> P70[Order 70: ArticleSummaryHandler 规则模板生成总结并写缓存]
+    P70 --> POSTER[下游闭环: 一键生成适老化高清辟谣长图海报 微信直发]
     M -.网关拦截计量.-> U[UsageTrackingService 累加日/周/月搜索次数并实时判满]
     S2 -.CallAdvisor拦截计量.-> U2[AiTokenUsageAdvisor 累加日/周/月Token并实时判满]
 ```
@@ -286,10 +294,120 @@ private String evaluateQuotaExhaustionReason(UserUsageStatEntity stat) {
 
 ---
 
+### 3.5 多模态输入闭环：腾讯云通用 OCR 视觉识别、智能段落拼接与防滥用限流
+
+在中老年社交场景中，流传最多的谣言往往并非规范排版的纯文本，而是花哨的**“大字长辈图”、微信推文截图甚至短视频定格海报**。中老年人习惯直接转发图片，如果强制用户先逐字手打或使用第三方工具提取文本，会造成巨大的使用门槛。为此，系统深度集成**腾讯云通用印刷体识别（GeneralBasicOCR）**，构筑了开箱即用的多模态输入闭环。
+
+#### （1）SDK 统一鉴权与基础设施复用
+OCR 模块直接引入官方最新 `tencentcloud-sdk-java-ocr:3.2.42`，与元宝搜索（WSA）SDK 保持同一版本体系。由于同属于腾讯云云 API 生态，后端通过 `OcrClientConfig` 复用完全相同的 `SecretId`、`SecretKey` 与地域配置（`ap-guangzhou`），无需在平台额外维护第二套密钥或引入第三方臃肿的 Python 识图服务：
+
+```java
+// OcrClientConfig.java —— 共享腾讯云官方凭证客户端注入
+@Configuration
+public class OcrClientConfig {
+    @Bean
+    public OcrClient ocrClient(FactCheckProperties properties) {
+        Credential cred = new Credential(
+                properties.getTencentCloud().getSecretId(),
+                properties.getTencentCloud().getSecretKey()
+        );
+        ClientProfile clientProfile = new ClientProfile();
+        clientProfile.setHttpProfile(new HttpProfile());
+        return new OcrClient(cred, properties.getTencentCloud().getRegion(), clientProfile);
+    }
+}
+```
+
+#### （2）前端多模态交互：支持剪贴板 `Ctrl+V` 截图直贴与拖拽
+针对中老年群聊场景的交互特征，前端 `InputPanel.vue` 实现了三种便捷输入方式：
+1. **工具栏识图按钮**：点击唤起原生文件选择框（支持 JPG、PNG、WEBP 等主流格式）；
+2. **剪贴板截图直贴（`Ctrl+V`）**：用户在微信电脑端、微信网页版或浏览器中右键“复制图片/截图”后，回到家医智核界面直接按 `Ctrl+V`，页面全局事件监听器捕获 `ClipboardItem` 自动转为 Base64 发起识别，无需中转保存到本地；
+3. **文件拖拽（Drag-and-Drop）**：直接将图片拖入输入文本域，即刻触发解析。
+
+```typescript
+// InputPanel.vue —— 剪贴板 Ctrl+V 截图直接识别
+function handlePaste(event: ClipboardEvent) {
+  const items = event.clipboardData?.items
+  if (!items) return
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) {
+        event.preventDefault()
+        processImageFile(file) // 校验体积并转 Base64 提交腾讯云 OCR 接口
+        break
+      }
+    }
+  }
+}
+```
+
+#### （3）智能段落重组算法与 SDK 异常安全转译
+腾讯云通用印刷体识别（`GeneralBasicOCR`）返回的是包含坐标信息的离散文本块集合。如果粗暴地按行换行拼接，会导致语义断裂，破坏后续 `@Order(20)` 分句级危急红线扫描与 `@Order(50)` 原子论断拆解的准确性。`OcrService` 实现了基于中文标点与换行特性的**自然段落平滑拼接算法**：
+
+```java
+// OcrService.java —— 腾讯云通用 OCR 识别与自然段落平滑拼接
+public String recognizeTextFromBase64(String base64Image) {
+    validateImageBase64(base64Image); // 格式合法性校验与 7MB 大小硬上限拦截
+
+    GeneralBasicOCRRequest req = new GeneralBasicOCRRequest();
+    req.setImageBase64(cleanBase64);
+
+    try {
+        GeneralBasicOCRResponse resp = ocrClient.GeneralBasicOCR(req);
+        TextDetection[] detections = resp.getTextDetections();
+        if (detections == null || detections.length == 0) {
+            throw new BizException(ErrorCode.OCR_EMPTY_RESULT, "未能识别到有效文字，请确认图片清晰");
+        }
+
+        // 自然段落智能拼接：若上一行非句末标点（。？！；），则自然合并；避免长难句被硬折行切碎
+        StringBuilder result = new StringBuilder();
+        for (TextDetection detection : detections) {
+            String text = detection.getDetectedText();
+            if (StringUtils.hasText(text)) {
+                String trimmed = text.trim();
+                if (result.length() > 0) {
+                    char lastChar = result.charAt(result.length() - 1);
+                    if ("。？！；!?;".indexOf(lastChar) >= 0) {
+                        result.append("\n"); // 遇完整句末自然分段
+                    } else {
+                        result.append(" ");  // 连续句子保持行内连贯
+                    }
+                }
+                result.append(trimmed);
+            }
+        }
+        return result.toString();
+    } catch (TencentCloudSDKException e) {
+        // SDK 错误码友好转译：防止底层凭证与网络堆栈外泄
+        String errCode = e.getErrorCode() != null ? e.getErrorCode() : "";
+        if (errCode.contains("FailedOperation.ImageDecodeFailed")) {
+            throw new BizException(ErrorCode.OCR_INVALID_IMAGE, "图片解码失败，请上传清晰有效的图片");
+        }
+        if (errCode.contains("ResourceUnavailable") || errCode.contains("LimitExceeded")) {
+            throw new BizException(ErrorCode.OCR_QUOTA_EXCEEDED, "识图服务调用额度已用尽，您可直接粘贴文字核验");
+        }
+        throw new BizException(ErrorCode.OCR_SERVICE_ERROR, "文字识别服务暂时不可用，请稍后重试");
+    }
+}
+```
+
+#### （4）防滥用与财务安全：单 IP 滑动窗口限流 + 免费额度保护
+* **单 IP 滑动窗口限流**：识图接口独立暴露于 `POST /api/v1/factcheck/ocr`，在控制器层接入滑动窗口限流器（默认单 IP 每分钟最多 10 次调用），防止恶意脚本批量刷爆识别服务。
+* **财务安全与零额外成本**：腾讯云通用印刷体识别为开发者提供**每月 1,000 次永久免费调用额度**。对于个人参赛与轻量 ToC 体验项目，只要开发者在腾讯云控制台未开通后付费（资源包用尽后自动扣余额），即便额度耗尽也仅触发代码层的 `OCR_QUOTA_EXCEEDED` 阻断，**绝不产生非预期扣费账单**，极大兼顾了实用性与财务安全性。
+
+#### （5）下游传播闭环：一键生成全量辟谣长图
+长辈习惯在微信群用图片传播养生谣言，晚辈最好的辟谣方式同样是**“用图片回击图片”**。系统基于前端纯 Canvas 2x 离线渲染实现了 `SharePosterModal` 全量辟谣长图生成组件：
+- **全量论断汇总**：单张长图聚合本次核验的整篇综述、全部论断卡片、权威出处原话、五色适老化大印章以及腾讯元宝搜索（WSA）权威数据溯源水印；
+- **自适应视口与背景防截断**：长图尺寸根据论断数量动态计算高度（覆盖 2000px 以上长图），通过虚拟 DOM 撑开并强制纯白底色，杜绝移动端截取时后半段黑底或透明的兼容性问题；
+- **剪贴板一键直传**：支持点击“复制长图”直接写入系统剪贴板（微信对话框按 `Ctrl+V` 直接发送图片），或点击“保存图片”下载高清 PNG，彻底打通了**“微信群截图输入 → 腾讯云 OCR 提取 → 元宝搜索循证 → 生成长图回传微信群”**的完整社交闭环！
+
+---
+
 ## 四、真实案例全链路走查：一次家族群长文核验与元宝搜索结果
 
 ### 4.1 测试输入
-粘贴如下包含多条典型误区的家族群转发文本：
+用户既可以直接粘贴纯文本，也可以直接在微信群中截取包含谣言海报的图片，并在系统主界面按 **`Ctrl+V`** 粘贴。腾讯云通用 OCR 在 800ms 内自动识别并提取出如下包含多条典型健康误区的文本并回填至输入框：
 > “家人们注意了！高血压患者千万别常年吃降压药，他汀和降压药特别伤肝肾，一旦转氨酶升高必须马上自己停药！每天早晨坚持吃黑木耳、喝一碗陈醋，一个月血管就软化了，血压自然降下来。突发心梗千万别打120乱动，只要用力猛拍左右胳膊肘内侧，就能立刻打通心包经急救活命！还有某某牌深海神仙胶囊三天见效包治百病！”
 
 ### 4.2 双层责任链流转与元宝搜索真实召回
@@ -301,7 +419,7 @@ private String evaluateQuotaExhaustionReason(UserUsageStatEntity stat) {
    * **心梗拍手肘急救**：主检索（`Mode=2`）直接召回国家卫生健康委员会 / 健康中国（一级来源）及央视网（二级·媒体报道，2024-11-20），满足充分性，**仅调用 1 次搜索即停**。摘要指出：急性心梗应立即安静平卧并拨打 120，拍打手肘不能打通血管，反而增加心肌耗氧量。
    * **木耳与醋软化血管**：主检索一级证据不足，自动触发 `Industry="gov"` 政务升级检索（**调用 2 次搜索**），召回北京市卫健委（一级，`wjw.beijing.gov.cn`，2024-05-10）与科普中国（二级，2024-01-18）。摘要指出：无科学证据表明吃黑木耳或喝醋能软化血管或替代降压药。
    * **擅自停用降压药/他汀**：主检索召回中国医药信息查询平台（二级，`dayi.org.cn`）与人民网健康（二级·媒体报道，2024-03-22），2 个不同主域名的二级来源满足充分性（**调用 1 次搜索即停**）。摘要指出：擅自停药易诱发血压反跳或心脑血管事件，调整用药须由医生评估。
-4. **硬校验、规则裁决与计量落库（Order 60~70）**：3 条论断的逐字引文与数字均通过四项硬校验，由第二层裁决链 `RefuteOnlyRule(@Order 4)` 裁定为 **【有误导 · 与依据矛盾】**，药物卡片自动附加停药安全警示；本次任务共调用 **4 次元宝搜索**（单论断平均 1.33 次），Token 与搜索次数实时累加至该用户日/周/月配额看板并写入历史快照。
+4. **硬校验、规则裁决、计量落库与长图辟谣（Order 60~70）**：3 条论断的逐字引文与数字均通过四项硬校验，由第二层裁决链 `RefuteOnlyRule(@Order 4)` 裁定为 **【有误导 · 与依据矛盾】**，药物卡片自动附加停药安全警示；本次任务共调用 **4 次元宝搜索**（单论断平均 1.33 次），Token 与搜索次数实时累加至该用户日/周/月配额看板并写入历史快照。用户点击【生成辟谣长图】，一键复制高清海报至剪贴板，直接粘贴发回家族群完成权威反击。
 
 ![实时多源检索进度看板与缓存命中状态](https://cdn.smallyoung.cn/1/5.png)
 
@@ -315,6 +433,7 @@ private String evaluateQuotaExhaustionReason(UserUsageStatEntity stat) {
 
 | 评估维度 | 通用大模型直接回答 | 家医智核（元宝搜索 + 双层责任链 + 双链配额） |
 | :-- | :-- | :-- |
+| **多模态与群社交闭环** | 仅支持纯文本输入，无法识别长辈图/微信截图；无长图生成能力，文字输出在微信群传播力弱 | 深度集成腾讯云通用 OCR，支持文件拖拽、图片上传与剪贴板 `Ctrl+V` 截图直贴秒识；纯前端 2x Canvas 一键合成全量辟谣长图并写入剪贴板直发微信群 |
 | **急症求助安全** | 继续生成长篇调理建议，可能延误抢救 | `@Order(20)` 危急红线同步短路拦截，0 外部调用，置顶一键拨打 120 |
 | **长文多论点处理** | 笼统回答，易漏次要论点或混入微商广告 | `@Order(50)` 拆解 ≤ 5 条原子论断，品牌宣传与个体用药自动分流不调搜索 |
 | **证据与出处真实性** | 无出处或编造打不开的死链 | 链接 100% 源自元宝搜索实时召回，引文经 ≤60 字连续子串与数字溯源硬校验 |
@@ -328,10 +447,11 @@ private String evaluateQuotaExhaustionReason(UserUsageStatEntity stat) {
 3. **模型在说明文字中脑补引文之外的百分比数字**：**改进**：在 `StanceAnnotationService` 增加正则数字溯源校验，发现越界数字立即丢弃模型说明，安全退化为纯引文模板。
 4. **`Industry="gov"` 召回结果存在基层转载噪音**：**改进**：政务升级检索召回的网页不自动视为一级来源，仍须通过三级白名单域名与机构关键词核验。
 5. **异步线程池丢失用户上下文导致配额漏计**：`CompletableFuture` 切换线程后 `ThreadLocal` 丢失，搜索流水 `user_id` 为空。**改进**：设计 `TaskExecutionHolder` 在主管道线程与论断并发线程入口显式透传 `(userId, taskId)`，并在每次底层调用前嵌入 `checkUserQuotaAvailable` 实时熔断。
+6. **OCR 图像 Base64 内存抖动与多行语义碎片化**：用户误传超大原图易引发 JVM 堆内存剧烈震荡；且 OCR 逐行返回的离散文本会导致“吃黑木耳”与“软化血管”分属两行，破坏后续分句危急扫描与原子论断提取。**改进**：在 `OcrService` 中设立 7MB 大小与 Base64 格式双重安全门禁；并基于中文句末标点（`。？！；`）实现自然段落平滑拼接算法，保持长难句内在语义完整性。
 
 ### 5.3 自动化测试与线上 SQL 量化指标
 
-**（1）核心规则与双链配额单元测试**：执行 `mvn test -Dtest=FactCheckCoreRulesTest`，**8 个测试方法全部通过**：
+**（1）核心规则、多模态 OCR 与双链配额单元测试**：执行 `mvn test -Dtest=FactCheckCoreRulesTest,OcrServiceTest`，**11 个核心测试方法全部通过**：
 
 | 测试方法 | 覆盖的架构与规则验证点 | 结果 |
 | :-- | :-- | :-- |
@@ -340,7 +460,7 @@ private String evaluateQuotaExhaustionReason(UserUsageStatEntity stat) {
 | `testStanceValidationAndSafeFallback` | 篡改引文拦截、空白符兼容、注入越界数字（如“90%的人”）触发纯引文模板退化 | 全部断言通过 |
 | `testAdjudicationChainRules` | 覆盖第二层裁决链 Order 0~6 全部路径（问医生、待重试、一级来源消歧、孤证判“证据偏弱”） | 全部断言通过 |
 | `testUserDualChainQuotaDailyWeeklyMonthly` | 用户日/周/月双链额度（Token 与元宝搜索）独立触发短板熔断、跨周期自动归零与流水回算 | 全部断言通过 |
-| `testOcrServiceAndSdkMapping` | 覆盖图片为空与超限拦截、腾讯云通用 OCR 文本拼接提取、额度与鉴权异常友好转换 | 全部断言通过 |
+| `testOcrServiceAndSdkMapping`（`OcrServiceTest`） | 覆盖图片为空与 7MB 超限拦截、腾讯云通用 OCR 离散文本自然标点拼接、额度耗尽与 SDK 异常业务友好转换 | 全部断言通过 |
 | `testSanitizer...` / `testEvidenceAdmission...` / `testArticleSummary...` | 微信噪音清洗与 12 禁用词剥离、三级白名单排序与去重、规则总结模板 | 全部断言通过 |
 
 **（2）生产环境性能与成本核算 SQL**：依托 `sys_usage_log` 与 `user_history_task`，可直接用 SQL 审计线上检索效能：
@@ -372,17 +492,19 @@ FROM user_history_task WHERE status = 'COMPLETED' AND claim_count > 0 AND search
   通过五道预算闸门协同控制：① 24h SHA-256 缓存拦截重复文本（0 调用）；② 渐进式检索在主检索证据充分时立即停止（单论断平均 ≤ 1.5 次）；③ 单论断上限 3 次、单任务上限 12 次；④ 单用户日/周/月双链配额（Token 5万/20万/50万，元宝搜索 30/120/300 次）实时短板熔断；⑤ 全局每日 5000 次兜底。
 * **Q3：“没查实”是不是代表这条健康说法是假的？**
   不是。“没查实”代表当前白名单可信来源证据不足、仅有一条二级孤证（证据偏弱）、同级来源冲突，或模型摘录未通过代码校验。卡片会明确标注具体原因，并提示“没查实不代表是真的，也不代表是假的”。
+* **Q4：图片识图 OCR 会不会产生额外的高昂费用？**
+  不会。系统选用腾讯云通用印刷体识别（`GeneralBasicOCR`），每月享有 1,000 次免费调用配额；平台统一托管模式下未开通后付费，额度用尽直接由代码安全降级并提示用户粘贴文本，同时针对 OCR 接口配置了单 IP 滑动窗口限流，既保障了零门槛体验，又严防异常刷量。
 
 ---
 
 ## 七、总结
 
-本项目围绕**腾讯云元宝搜索 `SearchPro`**，构建了一套面向严肃健康科普场景的工程化核验架构：
-1. **以元宝搜索两阶段检索（`Mode=2` + `Industry="gov"`）与三级白名单为证据底座**，配合中性检索词过滤，用极少的搜索调用次数稳定召回卫健委、疾控等权威证据；
-2. **以双层责任链（Order 10~70 主流程链 + Order 0~6 裁决链）与代码级四项硬校验为安全边界**，把结论裁决权收归确定性代码；
-3. **以 Spring AI `CallAdvisor` 与搜索网关构建双链三周期（日/周/月）配额熔断体系**，让每一次 Token 消耗与每一次元宝搜索调用都可计量、可限额、可追溯。
+本项目围绕**腾讯云通用 OCR 与元宝搜索 `SearchPro`**，构建了一套面向严肃健康科普场景的工程化核验架构：
+1. **以腾讯云通用 OCR 与纯前端 2x Canvas 打通多模态交互闭环**，支持长辈图/微信截图 `Ctrl+V` 秒贴识别与全量辟谣长图微信直发，攻克家庭群“不愿打字、无法发图辟谣”的现实痛点；
+2. **以元宝搜索两阶段检索（`Mode=2` + `Industry="gov"`）与三级白名单为证据底座**，配合中性检索词过滤，用极少的搜索调用次数稳定召回卫健委、疾控等权威证据；
+3. **以双层责任链（Order 10~70 主流程链 + Order 0~6 裁决链）与代码级四项硬校验为安全边界**，把结论裁决权收归确定性代码；
+4. **以 Spring AI `CallAdvisor` 与搜索网关构建双链三周期（日/周/月）配额熔断体系**，让每一次 Token 消耗与每一次元宝搜索调用都可计量、可限额、可追溯。
 
-* **在线体验地址**：[doc.smallyoung.cn](https://doc.smallyoung.cn/)
 * **开源仓库地址**：[https://github.com/yjiace/familydoc-sentinel](https://github.com/yjiace/familydoc-sentinel)
 
 ---
